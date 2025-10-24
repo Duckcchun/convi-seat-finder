@@ -164,7 +164,7 @@ export function ConvenienceStoreList({
           <div className="space-y-3">
             {displayedStores.map((store) => (
               <StoreItem 
-                key={store.id} 
+                key={store.id}
                 store={store} 
                 onDelete={onDelete}
               />

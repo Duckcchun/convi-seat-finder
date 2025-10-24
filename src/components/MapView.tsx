@@ -1,202 +1,138 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { MapPin, Navigation, Search, Filter, Map } from 'lucide-react';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
-import { QuickBrandButtons } from './QuickBrandButtons';
-import { Store, ConvenienceStoreSearchResult, StoreSelectInfo } from '../types/store';
+import { useEffect, useRef } from 'react';
+import { Store, StoreSelectInfo } from '../types/store'; // App.tsx에서 사용하는 타입 임포트
 
-// 카카오 맵 API 타입 정의
+// TypeScript가 window.kakao 객체를 인식하도록 선언
 declare global {
   interface Window {
     kakao: any;
   }
 }
 
+// MapView 컴포넌트가 받을 props 타입 정의 (App.tsx와 일치)
 interface MapViewProps {
   stores: Store[];
   onStoreSelect: (storeInfo: StoreSelectInfo) => void;
 }
 
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
+  // 지도를 담을 div의 ref
   const mapContainer = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<any>(null);
-  const [ps, setPs] = useState<any>(null);
-  const [infowindow, setInfowindow] = useState<any>(null);
-  const [markers, setMarkers] = useState<any[]>([]);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [nearbyStores, setNearbyStores] = useState<ConvenienceStoreSearchResult[]>([]);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [mapApiAvailable, setMapApiAvailable] = useState<boolean | null>(null);
-  const [brandFilter, setBrandFilter] = useState<string>('all');
-  const [isSearching, setIsSearching] = useState(false);
+  
+  // 생성된 지도 인스턴스를 저장할 ref
+  const mapRef = useRef<any>(null);
+  
+  // 생성된 마커들을 저장할 ref (초기화를 위해)
+  const markersRef = useRef<any[]>([]);
 
-  // 편의점 브랜드 목록
-  const convenienceBrands = [
-    { value: 'all', label: '전체' },
-    { value: 'CU', label: 'CU' },
-    { value: 'GS25', label: 'GS25' },
-    { value: '세븐일레븐', label: '세븐일레븐' },
-    { value: '이마트24', label: '이마트24' },
-    { value: '미니스톱', label: '미니스톱' },
-    { value: '씨스페이스', label: '씨스페이스' }
-  ];
-
-  // 카카오맵 스크립트 로드
+  // 1. 컴포넌트 마운트 시 "지도"를 생성하는 useEffect
   useEffect(() => {
-    const loadKakaoMap = async () => {
-      try {
-        if (window.kakao && window.kakao.maps) {
-          initializeMap();
-          setMapApiAvailable(true);
-          return;
-        }
-
-        let apiKey: string | null = null;
-        
-        try {
-          const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-          const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/env/KAKAO_MAP_API_KEY`, {
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`
-            }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            apiKey = data.value;
-          }
-        } catch (error) {
-          // 환경변수 접근 실패
-        }
-        
-        if (!apiKey || apiKey.trim() === '' || apiKey === 'demo-key-needs-setup') {
-          setMapApiAvailable(false);
-          return;
-        }
-        
-        const script = document.createElement('script');
-        script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services&autoload=false`;
-        script.async = true;
-        
-        script.onload = () => {
-          if (window.kakao && window.kakao.maps) {
-            window.kakao.maps.load(() => {
-              initializeMap();
-              setMapApiAvailable(true);
-            });
-          } else {
-            setMapApiAvailable(false);
-          }
-        };
-        
-        script.onerror = () => {
-          setMapApiAvailable(false);
-        };
-        
-        document.head.appendChild(script);
-        
-        setTimeout(() => {
-          if (mapApiAvailable === null) {
-            setMapApiAvailable(false);
-          }
-        }, 5000);
-        
-      } catch (error) {
-        setMapApiAvailable(false);
-      }
-    };
-
-    loadKakaoMap();
-  }, [mapApiAvailable]);
-
-  // 지도 초기화
-  const initializeMap = useCallback(() => {
-    if (!mapContainer.current || !window.kakao?.maps) {
-      return;
-    }
-
-    try {
-      const options = {
-        center: new window.kakao.maps.LatLng(37.5665, 126.9780),
-        level: 3
+    if (window.kakao && window.kakao.maps && mapContainer.current) {
+      const mapOption = {
+        center: new window.kakao.maps.LatLng(37.566826, 126.9786567), // 초기 중심 (서울시청)
+        level: 3,
       };
 
-      const mapInstance = new window.kakao.maps.Map(mapContainer.current, options);
-      const placesService = new window.kakao.maps.services.Places();
-      const infowindowInstance = new window.kakao.maps.InfoWindow({ zIndex: 1 });
+      // 지도 생성 및 ref에 저장
+      const map = new window.kakao.maps.Map(mapContainer.current, mapOption);
+      mapRef.current = map;
 
-      setMap(mapInstance);
-      setPs(placesService);
-      setInfowindow(infowindowInstance);
+      // 지도 클릭 이벤트 리스너 추가 (새 장소 제보용)
+      window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
+        const latlng = mouseEvent.latLng; // 클릭한 위도, 경도
 
-      // 지도 클릭 이벤트
-      window.kakao.maps.event.addListener(mapInstance, 'click', function(mouseEvent: any) {
-        const latlng = mouseEvent.latLng;
-        const latitude = latlng.getLat();
-        const longitude = latlng.getLng();
-
+        // Geocoder 객체 (좌표 -> 주소 변환)
         const geocoder = new window.kakao.maps.services.Geocoder();
-        geocoder.coord2Address(longitude, latitude, (result: any, status: any) => {
+        
+        geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result: any, status: any) => {
           if (status === window.kakao.maps.services.Status.OK) {
-            const address = result[0].address.address_name;
+            const address = result[0]?.road_address 
+              ? result[0].road_address.address_name 
+              : result[0].address.address_name;
+            
+            // App.tsx의 onStoreSelect 함수 호출
+            onStoreSelect({
+              name: '', // 이름은 비워둠 (사용자가 입력)
+              address: address,
+              latitude: latlng.getLat(),
+              longitude: latlng.getLng(),
+            });
+          } else {
+            // 주소 변환 실패 시, 좌표만 전달
+            console.warn('주소 변환 실패');
             onStoreSelect({
               name: '',
-              address: address,
-              latitude: latitude,
-              longitude: longitude
+              address: '', // 주소 비워둠
+              latitude: latlng.getLat(),
+              longitude: latlng.getLng(),
             });
           }
         });
       });
-
-      getCurrentLocation(mapInstance);
-      displayReportedStores(mapInstance);
-    } catch (error) {
-      console.error('지도 초기화 중 오류:', error);
-      setMapApiAvailable(false);
     }
-  }, [onStoreSelect]);
+  }, [onStoreSelect]); // onStoreSelect가 바뀔 때만 리스너 재등록
 
-  // 나머지 메서드들은 동일하므로 생략...
-  // (getCurrentLocation, displayReportedStores, searchConvenienceStores 등)
 
+  // 2. "stores" 데이터가 변경될 때 "마커"를 업데이트하는 useEffect
+  useEffect(() => {
+    // 지도 인스턴스나 kakao 객체가 없으면 실행 중지
+    if (!mapRef.current || !window.kakao) return;
+
+    // 1. 기존 마커 모두 제거
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = []; // 마커 배열 비우기
+
+    // 2. 새 'stores' 데이터로 마커 생성
+    stores.forEach((store) => {
+      // 위도, 경도 값이 유효한지 확인
+      if (store.latitude && store.longitude) {
+        const position = new window.kakao.maps.LatLng(store.latitude, store.longitude);
+
+        const marker = new window.kakao.maps.Marker({
+          map: mapRef.current, // mapRef에 저장된 지도 인스턴스 사용
+          position: position,
+          title: store.name,
+        });
+
+        // (선택) 마커에 인포윈도우(말풍선) 추가
+        const iwContent = `
+          <div style="padding:5px; font-size: 13px;">
+            <strong>${store.name}</strong><br/>
+            ${store.address}<br/>
+            좌석: ${store.available_seats} / ${store.total_seats}
+          </div>`;
+          
+        const infowindow = new window.kakao.maps.InfoWindow({
+          content: iwContent,
+          removable: true
+        });
+
+        // 마커에 클릭 이벤트 등록
+        window.kakao.maps.event.addListener(marker, 'click', () => {
+          infowindow.open(mapRef.current, marker);
+        });
+
+        // 생성된 마커를 ref 배열에 추가
+        markersRef.current.push(marker);
+      }
+    });
+
+    // (선택) 가게가 하나라도 있으면 첫 번째 가게 위치로 지도 중심 이동
+    if (stores.length > 0 && stores[0].latitude && stores[0].longitude) {
+      const firstStorePosition = new window.kakao.maps.LatLng(stores[0].latitude, stores[0].longitude);
+      mapRef.current.setCenter(firstStorePosition);
+    }
+
+  }, [stores]); // 'stores' prop이 변경될 때마다 이 effect 실행
+
+  
+  // 3. 지도를 렌더링할 div
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <MapPin className="h-5 w-5" />
-          <span>편의점 찾기</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* 지도 API 상태에 따른 UI 렌더링 */}
-        {mapApiAvailable === null ? (
-          <div className="w-full h-96 rounded-lg border flex items-center justify-center bg-gray-50">
-            <div className="text-center space-y-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-sm text-gray-500">지도를 불러오는 중...</p>
-            </div>
-          </div>
-        ) : mapApiAvailable === false ? (
-          <div className="w-full rounded-lg border bg-blue-50 p-6">
-            <div className="text-center space-y-3">
-              <Map className="h-8 w-8 text-blue-500 mx-auto" />
-              <div className="space-y-2">
-                <h4 className="font-medium text-blue-800">편의점 검색 기능</h4>
-                <p className="text-sm text-blue-700">
-                  지도 기능은 현재 사용할 수 없지만, 편의점 브랜드별 검색은 가능합니다.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div ref={mapContainer} className="w-full h-96 rounded-lg border" />
-        )}
-      </CardContent>
-    </Card>
+    <div 
+      id="map" 
+      ref={mapContainer} 
+      className="w-full h-80 sm:h-96 rounded-lg shadow-md border"
+    >
+      {/* 지도는 여기에 렌더링됩니다. */}
+    </div>
   );
 }

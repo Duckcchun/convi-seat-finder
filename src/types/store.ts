@@ -8,6 +8,8 @@ export interface Store {
   latitude?: number;
   longitude?: number;
   notes?: string;
+  available_seats: number;
+  total_seats: number;
 }
 
 export interface StoreFormData {
