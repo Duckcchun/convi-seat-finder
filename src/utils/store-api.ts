@@ -9,6 +9,7 @@ const IS_LOCALHOST =
 const REMOTE_ENABLED =
   import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === "true" ||
   (import.meta.env.VITE_ENABLE_SUPABASE_REMOTE !== "false" && !IS_LOCALHOST);
+let remoteFailedOnce = false;
 const sampleStores: Store[] = [
   {
     id: "dtower_8",
@@ -770,7 +771,12 @@ async function callServer(path: string, init?: RequestInit): Promise<Response | 
 }
 
 export async function getStores(): Promise<{ stores: Store[]; source: "server" | "local" }> {
-  const response = await callServer("/stores", { method: "GET" });
+  let response: Response | null = null;
+  try {
+    response = await callServer("/stores", { method: "GET" });
+  } catch {
+    response = null;
+  }
 
   if (response?.ok) {
     const data = await response.json();
