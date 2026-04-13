@@ -3,8 +3,8 @@
  * 오프라인 캐싱 및 백그라운드 동기화
  */
 
-const CACHE_NAME = 'convi-seat-finder-v2';
-const RUNTIME_CACHE = 'convi-seat-finder-runtime-v2';
+const CACHE_NAME = 'convi-seat-finder-v3';
+const RUNTIME_CACHE = 'convi-seat-finder-runtime-v3';
 
 // 캐시할 정적 자산
 const STATIC_ASSETS = [
@@ -78,6 +78,26 @@ self.addEventListener('fetch', (event) => {
             // 캐시도 없으면 오프라인 응답
             return caches.match('/convi-seat-finder/index.html');
           });
+        }),
+    );
+    return;
+  }
+
+  // HTML 네비게이션은 네트워크 우선으로 최신 배포 반영
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.status === 200) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put('/convi-seat-finder/index.html', cloned);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match('/convi-seat-finder/index.html');
         }),
     );
     return;
