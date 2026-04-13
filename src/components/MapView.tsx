@@ -22,12 +22,7 @@ interface NearbyPlace {
 }
 
 const KAKAO_FALLBACK_KEY = 'cd48498ae3118530087c6989802acced';
-const IS_LOCALHOST =
-  typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const REMOTE_ENABLED =
-  import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === 'true' ||
-  (import.meta.env.VITE_ENABLE_SUPABASE_REMOTE !== 'false' && !IS_LOCALHOST);
+const REMOTE_ENABLED = import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === 'true';
 let kakaoSdkLoadPromise: Promise<void> | null = null;
 
 interface MapViewProps {

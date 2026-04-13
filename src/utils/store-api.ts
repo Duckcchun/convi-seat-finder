@@ -6,9 +6,7 @@ const SERVER_TIMEOUT_MS = 2500;
 const IS_LOCALHOST =
   typeof window !== "undefined" &&
   (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-const REMOTE_ENABLED =
-  import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === "true" ||
-  (import.meta.env.VITE_ENABLE_SUPABASE_REMOTE !== "false" && !IS_LOCALHOST);
+const REMOTE_ENABLED = import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === "true";
 let remoteFailedOnce = false;
 const sampleStores: Store[] = [
   {
