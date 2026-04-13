@@ -3,6 +3,17 @@
 const defaultProjectId = "sljhxzqrgrqnrwpdoxuc";
 const defaultAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsamh4enFyZ3JxbnJ3cGRveHVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4Nzc0MDcsImV4cCI6MjA3MDQ1MzQwN30.R4IMUzh1i02VAunGIklyEjLdmnnLo4L05lResSM3nOo";
 
-export const projectId = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined)?.trim() || defaultProjectId;
+const envProjectId = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined)?.trim();
+const envSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/+$/, "");
+
+function deriveProjectIdFromUrl(url?: string): string | undefined {
+	if (!url) return undefined;
+	const match = /^https:\/\/([a-z0-9-]+)\.supabase\.co$/i.exec(url);
+	return match?.[1];
+}
+
+const derivedProjectId = deriveProjectIdFromUrl(envSupabaseUrl);
+
+export const projectId = envProjectId || derivedProjectId || defaultProjectId;
 export const publicAnonKey =
 	(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || defaultAnonKey;
