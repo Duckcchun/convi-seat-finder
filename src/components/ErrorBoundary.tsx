@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <div className="mb-4 rounded bg-red-100 p-3 font-mono text-xs text-red-900">
                 <p className="font-semibold">에러 메시지:</p>
-                <p className="mt-1 break-words">{this.state.error.message}</p>
+                <p className="mt-1 wrap-break-word">{this.state.error.message}</p>
               </div>
             )}
             <button

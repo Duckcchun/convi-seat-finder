@@ -209,7 +209,7 @@ export function StoreSearchInput({
       {isOpen && (
         <>
           {isSearching && (
-            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+            <div className="absolute z-1000 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
               <div className="text-center text-gray-500 text-sm">
                 <div className="inline-block animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full" />
                 <p className="mt-2">검색 중...</p>
@@ -218,7 +218,7 @@ export function StoreSearchInput({
           )}
           
           {!isSearching && searchResults.length > 0 && (
-            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+            <div className="absolute z-1000 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
           {searchResults.map((store, index) => (
             <button
               key={store.id}
@@ -252,7 +252,7 @@ export function StoreSearchInput({
           )}
           
           {!isSearching && searchResults.length === 0 && value.trim() && apiAvailable && (
-            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+            <div className="absolute z-1000 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
               <div className="text-center text-gray-500 text-sm">
                 <X className="h-4 w-4 mx-auto mb-1 opacity-50" />
                 검색 결과가 없습니다.

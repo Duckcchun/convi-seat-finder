@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { getGeolocationErrorMessage, getErrorMessage } from '../utils/errorHandler';
+import { getGeolocationErrorMessage } from '../utils/errorHandler';
 
 declare global {
   interface Window {
@@ -38,6 +38,9 @@ interface MapViewProps {
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const [isMapAvailable, setIsMapAvailable] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [resolvedKeyPreview, setResolvedKeyPreview] = useState<string>('');
+  const [mapInitKey, setMapInitKey] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -54,8 +57,13 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const activeInfoWindowRef = useRef<any>(null);
 
   const resolveKakaoApiKey = useCallback(async (): Promise<string> => {
+    const toPreview = (value: string) =>
+      value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
+
     if (!REMOTE_ENABLED) {
-      return (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+      const key = (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+      setResolvedKeyPreview(toPreview(key));
+      return key;
     }
 
     try {
@@ -77,6 +85,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       if (response.ok) {
         const data = await response.json();
         if (data?.value && data.value !== 'demo-key-needs-setup') {
+          setResolvedKeyPreview(toPreview(data.value));
           return data.value;
         }
       }
@@ -84,7 +93,9 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       // Supabase 경로 실패 시 로컬 값으로 폴백
     }
 
-    return (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+    const fallback = (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+    setResolvedKeyPreview(toPreview(fallback));
+    return fallback;
   }, []);
 
   const ensureKakaoSdk = useCallback(async () => {
@@ -99,30 +110,27 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       throw new Error('카카오 지도 API 키가 없습니다.');
     }
 
+    const sdkSrc = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services&autoload=false`;
+
     kakaoSdkLoadPromise = new Promise<void>((resolve, reject) => {
-      const existingScript = document.querySelector<HTMLScriptElement>('script[src*="dapi.kakao.com"]');
+      const existingScripts = Array.from(
+        document.querySelectorAll<HTMLScriptElement>('script[src*="dapi.kakao.com/v2/maps/sdk.js"]'),
+      );
 
-      if (existingScript) {
-        const checkInterval = setInterval(() => {
-          if (window.kakao?.maps?.services) {
-            clearInterval(checkInterval);
-            kakaoSdkLoadPromise = null;
-            resolve();
-          }
-        }, 100);
+      if (existingScripts.length > 0) {
+        existingScripts.forEach((scriptEl) => scriptEl.remove());
+      }
 
-        setTimeout(() => {
-          if (!window.kakao?.maps?.services) {
-            clearInterval(checkInterval);
-            kakaoSdkLoadPromise = null;
-            reject(new Error('지도 SDK 로드 타임아웃'));
-          }
-        }, 5000);
-        return;
+      if (window.kakao && !window.kakao?.maps?.services) {
+        try {
+          delete (window as any).kakao;
+        } catch {
+          // 읽기 전용 환경에서 delete 실패 가능
+        }
       }
 
       const script = document.createElement('script');
-      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services&autoload=false`;
+      script.src = sdkSrc;
       script.async = true;
       script.onload = () => {
         if (window.kakao?.maps?.load) {
@@ -137,7 +145,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       };
       script.onerror = () => {
         kakaoSdkLoadPromise = null;
-        reject(new Error('지도 SDK 로드 실패'));
+        reject(new Error(`지도 SDK 로드 실패: ${sdkSrc}`));
       };
       document.head.appendChild(script);
     });
@@ -296,89 +304,146 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   }, []);
 
   useEffect(() => {
-    let attempts = 0;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
+    let resizeHandler: (() => void) | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let loadTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const LOAD_TIMEOUT_MS = 20000;
+
+    const waitForLayout = () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
 
     const startMapInit = async () => {
       try {
         await ensureKakaoSdk();
-      } catch {
-        setIsMapAvailable(false);
+      } catch (error) {
+        if (!cancelled) {
+          setIsMapAvailable(false);
+          setMapError(error instanceof Error ? error.message : '카카오 지도 SDK를 불러오지 못했습니다.');
+        }
         return;
       }
 
-      intervalId = setInterval(() => {
-        attempts += 1;
+      await waitForLayout();
 
-        if (window.kakao?.maps && mapContainer.current && !mapRef.current) {
-          const map = new window.kakao.maps.Map(mapContainer.current, {
-            center: new window.kakao.maps.LatLng(37.566826, 126.9786567),
-            level: 4,
-          });
+      if (cancelled || mapRef.current) {
+        return;
+      }
 
-          mapRef.current = map;
+      if (!mapContainer.current) {
+        retryTimer = setTimeout(() => {
+          void startMapInit();
+        }, 100);
+        return;
+      }
+
+      try {
+        const map = new window.kakao.maps.Map(mapContainer.current, {
+          center: new window.kakao.maps.LatLng(37.566826, 126.9786567),
+          level: 4,
+        });
+
+        mapRef.current = map;
+        setIsMapReady(true);
+        setIsMapAvailable(true);
+        setMapError(null);
+        if (loadTimeoutTimer) {
+          clearTimeout(loadTimeoutTimer);
+        }
+
+        try {
           geocoderRef.current = new window.kakao.maps.services.Geocoder();
           searchServiceRef.current = new window.kakao.maps.services.Places(map);
-          setIsMapReady(true);
-          setIsMapAvailable(true);
+        } catch {
+          geocoderRef.current = null;
+          searchServiceRef.current = null;
+        }
 
-          setTimeout(() => {
-            if (mapRef.current?.relayout) {
-              mapRef.current.relayout();
-            }
-          }, 100);
+        if (cancelled) {
+          return;
+        }
 
-          window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
-            const latlng = mouseEvent.latLng;
+        resizeHandler = () => {
+          if (mapRef.current?.relayout) {
+            mapRef.current.relayout();
+          }
+        };
 
-            geocoderRef.current.coord2Address(
-              latlng.getLng(),
-              latlng.getLat(),
-              (result: any, status: string) => {
-                if (status === window.kakao.maps.services.Status.OK) {
-                  const address = result[0]?.road_address
-                    ? result[0].road_address.address_name
-                    : result[0]?.address?.address_name || '';
+        window.addEventListener('resize', resizeHandler);
 
-                  if (activeInfoWindowRef.current) {
-                    activeInfoWindowRef.current.close();
-                    activeInfoWindowRef.current = null;
-                  }
+        requestAnimationFrame(() => {
+          map.relayout?.();
+        });
 
-                  setPendingReportSelection({
-                    name: '',
-                    address,
-                    latitude: latlng.getLat(),
-                    longitude: latlng.getLng(),
-                  });
+        setTimeout(() => {
+          map.relayout?.();
+        }, 300);
+
+        window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
+          const latlng = mouseEvent.latLng;
+
+          geocoderRef.current.coord2Address(
+            latlng.getLng(),
+            latlng.getLat(),
+            (result: any, status: string) => {
+              if (status === window.kakao.maps.services.Status.OK) {
+                const address = result[0]?.road_address
+                  ? result[0].road_address.address_name
+                  : result[0]?.address?.address_name || '';
+
+                if (activeInfoWindowRef.current) {
+                  activeInfoWindowRef.current.close();
+                  activeInfoWindowRef.current = null;
                 }
-              },
-            );
-          });
 
-          searchConvenienceStores();
-          clearInterval(intervalId);
-        }
+                setPendingReportSelection({
+                  name: '',
+                  address,
+                  latitude: latlng.getLat(),
+                  longitude: latlng.getLng(),
+                });
+              }
+            },
+          );
+        });
 
-        if (attempts >= 60 && !mapRef.current) {
+      } catch (error) {
+        if (!cancelled) {
           setIsMapAvailable(false);
-          clearInterval(intervalId);
+          setMapError(error instanceof Error ? error.message : '카카오 지도를 초기화하지 못했습니다.');
         }
-      }, 200);
+      }
     };
+
+    loadTimeoutTimer = setTimeout(() => {
+      if (!cancelled && !mapRef.current) {
+        setIsMapAvailable(false);
+        setMapError('카카오 지도 초기화 시간(20초)을 초과했습니다. 네트워크 또는 브라우저 확장프로그램 차단 여부를 확인해주세요.');
+      }
+    }, LOAD_TIMEOUT_MS);
 
     startMapInit();
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (loadTimeoutTimer) clearTimeout(loadTimeoutTimer);
+      if (resizeHandler) window.removeEventListener('resize', resizeHandler);
       if (activeInfoWindowRef.current) {
         activeInfoWindowRef.current.close();
         activeInfoWindowRef.current = null;
       }
+      setIsMapReady(false);
+      mapRef.current = null;
       clearMarkers(reportMarkersRef.current);
       clearMarkers(placeMarkersRef.current);
     };
-  }, [clearMarkers, ensureKakaoSdk, searchConvenienceStores]);
+  }, [clearMarkers, ensureKakaoSdk, mapInitKey]);
 
   useEffect(() => {
     if (!mapRef.current || !window.kakao?.maps) return;
@@ -427,57 +492,40 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   };
 
   if (!isMapAvailable) {
-    const storesWithCoords = stores.filter((store) => store.latitude && store.longitude).slice(0, 6);
+    const currentHost = typeof window !== 'undefined' ? window.location.host : 'unknown';
 
     return (
       <div className="space-y-3">
-        <div className="w-full rounded-lg border bg-white p-4 text-center shadow-md space-y-2">
+        <div className="w-full rounded-2xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-blue-50 p-4 text-center shadow-sm space-y-2">
           <MapPin className="h-7 w-7 mx-auto text-gray-400" />
-          <p className="text-sm text-gray-700">카카오 지도 연결이 불안정해 대체 지도를 표시합니다.</p>
-          <p className="text-xs text-gray-500">네트워크가 안정되면 카카오 지도로 자동 전환됩니다.</p>
-        </div>
-
-        <div className="w-full h-80 sm:h-96 rounded-lg border overflow-hidden shadow-md">
-          <iframe
-            title="대체 지도"
-            src="https://www.openstreetmap.org/export/embed.html?bbox=126.85%2C37.45%2C127.15%2C37.65&layer=mapnik"
-            className="w-full h-full border-0"
-            loading="lazy"
-          />
-        </div>
-
-        {storesWithCoords.length > 0 && (
-          <div className="rounded-lg border bg-white p-3">
-            <div className="text-sm font-medium text-gray-800 mb-2">제보된 좌표 빠른 선택</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {storesWithCoords.map((store) => (
-                <button
-                  key={store.id}
-                  type="button"
-                  onClick={() =>
-                    onStoreSelect({
-                      name: store.name,
-                      address: store.address,
-                      latitude: store.latitude,
-                      longitude: store.longitude,
-                    })
-                  }
-                  className="text-left rounded-md border p-2 hover:bg-gray-50"
-                >
-                  <div className="text-sm font-medium text-gray-900">{store.name}</div>
-                  <div className="text-xs text-gray-600 line-clamp-1">{store.address}</div>
-                </button>
-              ))}
-            </div>
+          <p className="text-sm font-medium text-gray-800">카카오 지도를 초기화하지 못했습니다.</p>
+          <p className="text-xs text-gray-600 wrap-break-word">원인: {mapError || '알 수 없는 오류'}</p>
+          <p className="text-xs text-gray-500">현재 접속 주소: {currentHost}</p>
+            {resolvedKeyPreview && <p className="text-xs text-gray-500">현재 사용 JS 키: {resolvedKeyPreview}</p>}
+            <p className="text-xs text-gray-500">Kakao Developers → 내 애플리케이션 → 플랫폼(Web)에 위 주소를 정확히 등록해야 합니다.</p>
+            <p className="text-xs text-gray-500">광고차단/보안 확장프로그램이 dapi.kakao.com을 막으면 지도 로드가 실패할 수 있습니다.</p>
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsMapAvailable(true);
+                setIsMapReady(false);
+                setMapError(null);
+                setMapInitKey((prev) => prev + 1);
+              }}
+            >
+              카카오 지도 다시 시도
+            </Button>
           </div>
-        )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border bg-white p-3 space-y-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
         <form onSubmit={handleSearchSubmit} className="flex items-start gap-2">
           <div className="relative flex-1">
             <Input
@@ -552,17 +600,30 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-300 bg-linear-to-br from-slate-50 via-white to-blue-50 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">지도</div>
+            <div className="text-xs text-slate-500">클릭해서 위치를 선택할 수 있습니다</div>
+          </div>
+          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+            {isMapReady ? '실시간 지도' : '불러오는 중'}
+          </div>
+        </div>
+
         <div
           id="map"
           ref={mapContainer}
-          className="w-full h-80 sm:h-96 md:h-[500px] lg:h-[600px] rounded-lg border shadow-md"
+          className="w-full"
+          style={{ height: 'clamp(320px, 55vh, 600px)', minHeight: '320px' }}
           aria-label="편의점 위치 지도"
           role="region"
         />
         {!isMapReady && (
-          <div className="absolute inset-0 rounded-lg border bg-white/90 flex items-center justify-center">
-            <div className="text-sm text-gray-600">지도를 불러오는 중...</div>
+          <div className="absolute inset-[49px_0_0_0] flex items-center justify-center bg-white/80 backdrop-blur-sm">
+            <div className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm">
+              지도를 불러오는 중... (최대 20초)
+            </div>
           </div>
         )}
       </div>

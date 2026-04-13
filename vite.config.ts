@@ -57,7 +57,12 @@
     },
     server: {
       port: 3000,
-      strictPort: false,
+      strictPort: true,
       open: true,
+      hmr: {
+        host: 'localhost',
+        protocol: 'ws',
+        clientPort: 3000,
+      },
     },
   }));

@@ -3,8 +3,8 @@
  * 오프라인 캐싱 및 백그라운드 동기화
  */
 
-const CACHE_NAME = 'convi-seat-finder-v1';
-const RUNTIME_CACHE = 'convi-seat-finder-runtime-v1';
+const CACHE_NAME = 'convi-seat-finder-v2';
+const RUNTIME_CACHE = 'convi-seat-finder-runtime-v2';
 
 // 캐시할 정적 자산
 const STATIC_ASSETS = [

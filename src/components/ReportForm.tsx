@@ -11,7 +11,7 @@ import type { StoreFormData, StoreSelectInfo } from '../types/store';
 import { MapPin, User, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { getErrorMessage } from '../utils/errorHandler';
-import { validateField, VALIDATION_RULES, type StoreFormSchema } from '../utils/validation';
+import { validateField, type StoreFormSchema } from '../utils/validation';
 
 interface ReportFormProps {
   onSuccess: () => void;
