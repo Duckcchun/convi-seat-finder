@@ -29,16 +29,16 @@ export function SearchBar({ onSearch }: SearchBarProps) {
   return (
     <form onSubmit={handleSubmit} className="flex space-x-2">
       <div className="relative flex-1">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-4 w-4 text-gray-400" />
-        </div>
         <Input
           type="text"
           placeholder="편의점 이름 또는 주소로 검색..."
           value={query}
           onChange={handleInputChange}
-          className="pl-10 pr-10"
+          className="h-10 pr-10"
         />
+        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+          <Search className="h-4 w-4 text-gray-400" />
+        </div>
         {query && (
           <button
             type="button"
@@ -49,7 +49,7 @@ export function SearchBar({ onSearch }: SearchBarProps) {
           </button>
         )}
       </div>
-      <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+      <Button type="submit" className="bg-blue-600 hover:bg-blue-700 h-10">
         검색
       </Button>
     </form>

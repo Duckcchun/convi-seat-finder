@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store } from '../App';
+import { Store } from '../types/store';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
@@ -23,7 +23,8 @@ import {
   EyeOff,
   LogOut
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { deleteStore, getStores, updateStore } from '../utils/store-api';
 
 interface AdminDashboardProps {
   onClose: () => void;
@@ -43,27 +44,9 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
   const loadAllStores = async () => {
     try {
       setIsLoading(true);
-      const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/stores`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        },
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const validStores = (Array.isArray(data) ? data : []).filter(
-          (store) => store && store.id && store.name && store.address
-        );
-        setStores(validStores);
-      } else {
-        toast.error('데이터를 불러오는데 실패했습니다.');
-      }
+      const { stores: loadedStores } = await getStores();
+      setStores(loadedStores);
     } catch (error) {
-      console.error('데이터 로드 오류:', error);
       toast.error('데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
@@ -83,20 +66,9 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
     }
 
     try {
-      const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/stores/${selectedStore.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify(editForm),
-        },
-      );
+      const updated = await updateStore(selectedStore.id, editForm);
 
-      if (response.ok) {
+      if (updated) {
         toast.success('정보가 업데이트되었습니다.');
         setIsEditDialogOpen(false);
         loadAllStores();
@@ -104,7 +76,6 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
         toast.error('업데이트에 실패했습니다.');
       }
     } catch (error) {
-      console.error('업데이트 오류:', error);
       toast.error('업데이트 중 오류가 발생했습니다.');
     }
   };
@@ -113,25 +84,15 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
     if (!confirm('정말로 이 데이터를 삭제하시겠습니까?')) return;
 
     try {
-      const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/stores/${storeId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        },
-      );
+      const isDeleted = await deleteStore(storeId);
 
-      if (response.ok) {
+      if (isDeleted) {
         toast.success('데이터가 삭제되었습니다.');
         loadAllStores();
       } else {
         toast.error('삭제에 실패했습니다.');
       }
     } catch (error) {
-      console.error('삭제 오류:', error);
       toast.error('삭제 중 오류가 발생했습니다.');
     }
   };

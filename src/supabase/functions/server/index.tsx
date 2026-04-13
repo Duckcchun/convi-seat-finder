@@ -339,7 +339,7 @@ app.post(
           hasSeating: "yes",
           lastUpdated: new Date().toISOString(),
           reportedBy: "관리자",
-          notes: "2인용 테이블 3개, 4인용 테이블 2개",
+          notes: "좌석 형태: 2인/4인 테이블 | 비고: 2인 3개, 4인 2개",
         },
         {
           id: "sample_2",
@@ -348,7 +348,7 @@ app.post(
           hasSeating: "no",
           lastUpdated: new Date().toISOString(),
           reportedBy: "관리자",
-          notes: "서서 취식할 수 있는 높은 테이블만 있음",
+          notes: "좌석 형태: 높은 스탠딩 테이블 | 비고: 서서 취식만 가능",
         },
         {
           id: "sample_3",
@@ -357,7 +357,7 @@ app.post(
           hasSeating: "yes",
           lastUpdated: new Date().toISOString(),
           reportedBy: "관리자",
-          notes: "창가쪽 2인용 테이블 4개",
+          notes: "좌석 형태: 창가 2인 테이블 | 비고: 총 4개",
         },
         {
           id: "sample_4",

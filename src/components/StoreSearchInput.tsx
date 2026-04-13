@@ -29,60 +29,19 @@ export function StoreSearchInput({
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 카카오 지도 API 사용 가능 여부 확인
   useEffect(() => {
-    const checkApiAvailability = async () => {
+    const checkApiAvailability = () => {
       if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
         setApiAvailable(true);
         return;
       }
 
-      try {
-        const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-        const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/env/KAKAO_MAP_API_KEY`, {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.value && data.value !== 'demo-key-needs-setup') {
-            if (!window.kakao) {
-              const script = document.createElement('script');
-              script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${data.value}&libraries=services&autoload=false`;
-              script.async = true;
-              
-              script.onload = () => {
-                if (window.kakao && window.kakao.maps) {
-                  window.kakao.maps.load(() => {
-                    setApiAvailable(true);
-                  });
-                } else {
-                  setApiAvailable(false);
-                }
-              };
-              
-              script.onerror = () => {
-                setApiAvailable(false);
-              };
-              
-              document.head.appendChild(script);
-            } else {
-              setApiAvailable(true);
-            }
-          } else {
-            setApiAvailable(false);
-          }
-        } else {
-          setApiAvailable(false);
-        }
-      } catch (error) {
-        setApiAvailable(false);
-      }
+      // index.html에서 카카오 SDK를 로드하므로 없으면 검색 자동완성만 비활성화한다.
+      setApiAvailable(false);
     };
 
     checkApiAvailability();
@@ -92,6 +51,7 @@ export function StoreSearchInput({
   const searchStores = async (query: string) => {
     if (!query.trim() || !window.kakao?.maps?.services || apiAvailable === false) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
@@ -101,27 +61,25 @@ export function StoreSearchInput({
       const places = new window.kakao.maps.services.Places();
       
       places.keywordSearch(`${query.trim()} 편의점`, (data: ConvenienceStoreSearchResult[], status: any) => {
-        setIsSearching(false);
-        
         if (status === window.kakao.maps.services.Status.OK) {
           const convenienceBrands = ['CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
           const filteredResults = data.filter(place => 
             convenienceBrands.some(brand => 
-              place.place_name.includes(brand) || place.place_name.includes('편의점')
+              place.place_name.includes(brand)
             )
-          ).slice(0, 8);
+          ).slice(0, 15);
           
           setSearchResults(filteredResults);
           setSelectedIndex(-1);
         } else {
           setSearchResults([]);
         }
+        setIsSearching(false);
       }, {
         category_group_code: 'CS2',
         size: 15
       });
-    } catch (error) {
-      console.error('편의점 검색 중 오류:', error);
+    } catch {
       setSearchResults([]);
       setIsSearching(false);
     }
@@ -136,14 +94,15 @@ export function StoreSearchInput({
       clearTimeout(searchTimeoutRef.current);
     }
 
-    if (newValue.trim() && apiAvailable) {
+    if (newValue.trim() && apiAvailable !== false) {
       setIsOpen(true);
       searchTimeoutRef.current = setTimeout(() => {
         searchStores(newValue);
-      }, 500);
+      }, 300);
     } else {
       setIsOpen(false);
       setSearchResults([]);
+      setIsSearching(false);
     }
   };
 
@@ -228,9 +187,9 @@ export function StoreSearchInput({
             }
           }}
           disabled={disabled}
-          className="pr-10"
+          className="h-11 px-4 py-3 pr-10 bg-white border-slate-300 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
         />
-        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
           {isSearching ? (
             <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full" />
           ) : (
@@ -247,8 +206,19 @@ export function StoreSearchInput({
       )}
 
       {/* 검색 결과 드롭다운 */}
-      {isOpen && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+      {isOpen && (
+        <>
+          {isSearching && (
+            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+              <div className="text-center text-gray-500 text-sm">
+                <div className="inline-block animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full" />
+                <p className="mt-2">검색 중...</p>
+              </div>
+            </div>
+          )}
+          
+          {!isSearching && searchResults.length > 0 && (
+            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto">
           {searchResults.map((store, index) => (
             <button
               key={store.id}
@@ -258,7 +228,7 @@ export function StoreSearchInput({
               }`}
             >
               <div className="flex items-start space-x-2">
-                <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <MapPin className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">
                     {store.place_name}
@@ -273,22 +243,23 @@ export function StoreSearchInput({
                   )}
                 </div>
                 {index === selectedIndex && (
-                  <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                  <Check className="h-4 w-4 text-blue-600 shrink-0" />
                 )}
               </div>
             </button>
           ))}
-        </div>
-      )}
-
-      {/* 검색 결과가 없을 때 */}
-      {isOpen && !isSearching && searchResults.length === 0 && value.trim() && apiAvailable && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-          <div className="text-center text-gray-500 text-sm">
-            <X className="h-4 w-4 mx-auto mb-1 opacity-50" />
-            검색 결과가 없습니다.
-          </div>
-        </div>
+            </div>
+          )}
+          
+          {!isSearching && searchResults.length === 0 && value.trim() && apiAvailable && (
+            <div className="absolute z-[1000] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+              <div className="text-center text-gray-500 text-sm">
+                <X className="h-4 w-4 mx-auto mb-1 opacity-50" />
+                검색 결과가 없습니다.
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

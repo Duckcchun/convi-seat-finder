@@ -3,9 +3,9 @@
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
 
-  export default defineConfig({
+  export default defineConfig(({ mode }) => ({
     plugins: [react()],
-    base: '/convi-seat-finder/',
+    base: mode === 'production' ? '/convi-seat-finder/' : '/',
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
@@ -57,6 +57,7 @@
     },
     server: {
       port: 3000,
+      strictPort: false,
       open: true,
     },
-  });
+  }));

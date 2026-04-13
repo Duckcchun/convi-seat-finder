@@ -1,138 +1,583 @@
-import { useEffect, useRef } from 'react';
-import { Store, StoreSelectInfo } from '../types/store'; // App.tsx에서 사용하는 타입 임포트
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Store, StoreSelectInfo } from '../types/store';
+import { MapPin, Navigation, RefreshCw, Search } from 'lucide-react';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { toast } from 'sonner';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { getGeolocationErrorMessage, getErrorMessage } from '../utils/errorHandler';
 
-// TypeScript가 window.kakao 객체를 인식하도록 선언
 declare global {
   interface Window {
     kakao: any;
   }
 }
 
-// MapView 컴포넌트가 받을 props 타입 정의 (App.tsx와 일치)
+interface NearbyPlace {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+const KAKAO_FALLBACK_KEY = 'cd48498ae3118530087c6989802acced';
+const IS_LOCALHOST =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const REMOTE_ENABLED =
+  import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === 'true' ||
+  (import.meta.env.VITE_ENABLE_SUPABASE_REMOTE !== 'false' && !IS_LOCALHOST);
+let kakaoSdkLoadPromise: Promise<void> | null = null;
+
 interface MapViewProps {
   stores: Store[];
   onStoreSelect: (storeInfo: StoreSelectInfo) => void;
 }
 
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
-  // 지도를 담을 div의 ref
+  const [isMapAvailable, setIsMapAvailable] = useState(true);
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState('all');
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
+  const [pendingReportSelection, setPendingReportSelection] = useState<StoreSelectInfo | null>(null);
+
   const mapContainer = useRef<HTMLDivElement>(null);
-  
-  // 생성된 지도 인스턴스를 저장할 ref
   const mapRef = useRef<any>(null);
-  
-  // 생성된 마커들을 저장할 ref (초기화를 위해)
-  const markersRef = useRef<any[]>([]);
+  const reportMarkersRef = useRef<any[]>([]);
+  const placeMarkersRef = useRef<any[]>([]);
+  const geocoderRef = useRef<any>(null);
+  const searchServiceRef = useRef<any>(null);
+  const activeInfoWindowRef = useRef<any>(null);
 
-  // 1. 컴포넌트 마운트 시 "지도"를 생성하는 useEffect
-  useEffect(() => {
-    if (window.kakao && window.kakao.maps && mapContainer.current) {
-      const mapOption = {
-        center: new window.kakao.maps.LatLng(37.566826, 126.9786567), // 초기 중심 (서울시청)
-        level: 3,
-      };
-
-      // 지도 생성 및 ref에 저장
-      const map = new window.kakao.maps.Map(mapContainer.current, mapOption);
-      mapRef.current = map;
-
-      // 지도 클릭 이벤트 리스너 추가 (새 장소 제보용)
-      window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
-        const latlng = mouseEvent.latLng; // 클릭한 위도, 경도
-
-        // Geocoder 객체 (좌표 -> 주소 변환)
-        const geocoder = new window.kakao.maps.services.Geocoder();
-        
-        geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result: any, status: any) => {
-          if (status === window.kakao.maps.services.Status.OK) {
-            const address = result[0]?.road_address 
-              ? result[0].road_address.address_name 
-              : result[0].address.address_name;
-            
-            // App.tsx의 onStoreSelect 함수 호출
-            onStoreSelect({
-              name: '', // 이름은 비워둠 (사용자가 입력)
-              address: address,
-              latitude: latlng.getLat(),
-              longitude: latlng.getLng(),
-            });
-          } else {
-            // 주소 변환 실패 시, 좌표만 전달
-            console.warn('주소 변환 실패');
-            onStoreSelect({
-              name: '',
-              address: '', // 주소 비워둠
-              latitude: latlng.getLat(),
-              longitude: latlng.getLng(),
-            });
-          }
-        });
-      });
+  const resolveKakaoApiKey = useCallback(async (): Promise<string> => {
+    if (!REMOTE_ENABLED) {
+      return (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
     }
-  }, [onStoreSelect]); // onStoreSelect가 바뀔 때만 리스너 재등록
 
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2200);
 
-  // 2. "stores" 데이터가 변경될 때 "마커"를 업데이트하는 useEffect
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/env/KAKAO_MAP_API_KEY`,
+        {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.value && data.value !== 'demo-key-needs-setup') {
+          return data.value;
+        }
+      }
+    } catch {
+      // Supabase 경로 실패 시 로컬 값으로 폴백
+    }
+
+    return (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+  }, []);
+
+  const ensureKakaoSdk = useCallback(async () => {
+    if (window.kakao?.maps?.services) return;
+
+    if (kakaoSdkLoadPromise) {
+      return kakaoSdkLoadPromise;
+    }
+
+    const apiKey = await resolveKakaoApiKey();
+    if (!apiKey) {
+      throw new Error('카카오 지도 API 키가 없습니다.');
+    }
+
+    kakaoSdkLoadPromise = new Promise<void>((resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>('script[src*="dapi.kakao.com"]');
+
+      if (existingScript) {
+        const checkInterval = setInterval(() => {
+          if (window.kakao?.maps?.services) {
+            clearInterval(checkInterval);
+            kakaoSdkLoadPromise = null;
+            resolve();
+          }
+        }, 100);
+
+        setTimeout(() => {
+          if (!window.kakao?.maps?.services) {
+            clearInterval(checkInterval);
+            kakaoSdkLoadPromise = null;
+            reject(new Error('지도 SDK 로드 타임아웃'));
+          }
+        }, 5000);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services&autoload=false`;
+      script.async = true;
+      script.onload = () => {
+        if (window.kakao?.maps?.load) {
+          window.kakao.maps.load(() => {
+            kakaoSdkLoadPromise = null;
+            resolve();
+          });
+        } else {
+          kakaoSdkLoadPromise = null;
+          reject(new Error('카카오 SDK 초기화 실패'));
+        }
+      };
+      script.onerror = () => {
+        kakaoSdkLoadPromise = null;
+        reject(new Error('지도 SDK 로드 실패'));
+      };
+      document.head.appendChild(script);
+    });
+    return kakaoSdkLoadPromise;
+  }, [resolveKakaoApiKey]);
+
+  const brandOptions = useMemo(() => ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'], []);
+
+  const clearMarkers = useCallback((target: any[]) => {
+    target.forEach((marker) => marker.setMap(null));
+    target.length = 0;
+  }, []);
+
+  const moveToUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error('위치 인식을 지원하지 않는 브라우저입니다.');
+      return;
+    }
+    if (!mapRef.current || !window.kakao?.maps) {
+      toast.error('지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latLng = new window.kakao.maps.LatLng(position.coords.latitude, position.coords.longitude);
+        mapRef.current.setCenter(latLng);
+        toast.success('현재 위치로 이동했습니다.');
+      },
+      (error) => {
+        toast.error(getGeolocationErrorMessage(error.code));
+      },
+      { enableHighAccuracy: true, timeout: 5000 },
+    );
+  }, []);
+
+  const searchConvenienceStores = useCallback(
+    (inputKeyword?: string) => {
+      if (!isMapReady || !searchServiceRef.current || !window.kakao?.maps?.services) return;
+
+      const queryBase = inputKeyword?.trim()
+        ? `${inputKeyword.trim()} 편의점`
+        : selectedBrand === 'all'
+          ? '편의점'
+          : `${selectedBrand} 편의점`;
+
+      setIsSearching(true);
+
+      searchServiceRef.current.keywordSearch(
+        queryBase,
+        (data: any[], status: string) => {
+          setIsSearching(false);
+
+          if (status !== window.kakao.maps.services.Status.OK || !Array.isArray(data)) {
+            clearMarkers(placeMarkersRef.current);
+            setNearbyPlaces([]);
+            return;
+          }
+
+          const filtered = data
+            .filter((place) => {
+              if (selectedBrand === 'all') return true;
+              return String(place.place_name || '').includes(selectedBrand);
+            })
+            .slice(0, 12)
+            .map((place) => ({
+              id: String(place.id),
+              name: String(place.place_name),
+              address: String(place.road_address_name || place.address_name || ''),
+              latitude: Number(place.y),
+              longitude: Number(place.x),
+            }));
+
+          setNearbyPlaces(filtered);
+          clearMarkers(placeMarkersRef.current);
+
+          filtered.forEach((place) => {
+            const marker = new window.kakao.maps.Marker({
+              map: mapRef.current,
+              position: new window.kakao.maps.LatLng(place.latitude, place.longitude),
+              title: place.name,
+            });
+
+            const matchedStore = stores.find(
+              (store) =>
+                store.name === place.name ||
+                store.address === place.address ||
+                (store.latitude &&
+                  store.longitude &&
+                  Math.abs(store.latitude - place.latitude) < 0.0003 &&
+                  Math.abs(store.longitude - place.longitude) < 0.0003),
+            );
+
+            const infoWindow = new window.kakao.maps.InfoWindow({
+              content: `
+                <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
+                  <strong style="font-size:12px;display:block;margin-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;">${place.name}</strong>
+                  <div style="color:#666;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">
+                    ${place.address}
+                  </div>
+                  ${matchedStore
+                    ? `
+                      <div>
+                        <div style="color:#d32f2f;font-weight:bold;margin-bottom:4px;">좌석: ${matchedStore.hasSeating === 'yes' ? '있음' : matchedStore.hasSeating === 'no' ? '없음' : '확인 필요'}</div>
+                        ${matchedStore.notes ? `<div style="margin-top:4px;padding:6px;background-color:#f5f5f5;border-radius:3px;color:#333;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">${matchedStore.notes}</div>` : ''}
+                      </div>
+                    `
+                    : '<div style="color:#666;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">아직 제보된 좌석 정보가 없습니다.</div>'}
+                </div>
+              `,
+            });
+
+            window.kakao.maps.event.addListener(marker, 'click', () => {
+              if (activeInfoWindowRef.current) {
+                activeInfoWindowRef.current.close();
+              }
+              infoWindow.open(mapRef.current, marker);
+              activeInfoWindowRef.current = infoWindow;
+
+              const storeToSelect = matchedStore || place;
+              setPendingReportSelection({
+                name: storeToSelect.name,
+                address: storeToSelect.address,
+                latitude: storeToSelect.latitude,
+                longitude: storeToSelect.longitude,
+              });
+            });
+
+            placeMarkersRef.current.push(marker);
+          });
+        },
+        {
+          size: 15,
+          category_group_code: 'CS2',
+        },
+      );
+    },
+    [clearMarkers, isMapReady, selectedBrand, stores],
+  );
+
+  const handleNearbyPlaceSelect = useCallback((place: NearbyPlace) => {
+    if (!mapRef.current || !window.kakao?.maps) return;
+
+    const target = new window.kakao.maps.LatLng(place.latitude, place.longitude);
+    mapRef.current.setCenter(target);
+    mapRef.current.setLevel(3);
+
+    setPendingReportSelection({
+      name: place.name,
+      address: place.address,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    });
+    setKeyword(place.name);
+    setIsSearchFocused(false);
+  }, []);
+
   useEffect(() => {
-    // 지도 인스턴스나 kakao 객체가 없으면 실행 중지
-    if (!mapRef.current || !window.kakao) return;
+    let attempts = 0;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
 
-    // 1. 기존 마커 모두 제거
-    markersRef.current.forEach(marker => marker.setMap(null));
-    markersRef.current = []; // 마커 배열 비우기
+    const startMapInit = async () => {
+      try {
+        await ensureKakaoSdk();
+      } catch {
+        setIsMapAvailable(false);
+        return;
+      }
 
-    // 2. 새 'stores' 데이터로 마커 생성
+      intervalId = setInterval(() => {
+        attempts += 1;
+
+        if (window.kakao?.maps && mapContainer.current && !mapRef.current) {
+          const map = new window.kakao.maps.Map(mapContainer.current, {
+            center: new window.kakao.maps.LatLng(37.566826, 126.9786567),
+            level: 4,
+          });
+
+          mapRef.current = map;
+          geocoderRef.current = new window.kakao.maps.services.Geocoder();
+          searchServiceRef.current = new window.kakao.maps.services.Places(map);
+          setIsMapReady(true);
+          setIsMapAvailable(true);
+
+          setTimeout(() => {
+            if (mapRef.current?.relayout) {
+              mapRef.current.relayout();
+            }
+          }, 100);
+
+          window.kakao.maps.event.addListener(map, 'click', (mouseEvent: any) => {
+            const latlng = mouseEvent.latLng;
+
+            geocoderRef.current.coord2Address(
+              latlng.getLng(),
+              latlng.getLat(),
+              (result: any, status: string) => {
+                if (status === window.kakao.maps.services.Status.OK) {
+                  const address = result[0]?.road_address
+                    ? result[0].road_address.address_name
+                    : result[0]?.address?.address_name || '';
+
+                  if (activeInfoWindowRef.current) {
+                    activeInfoWindowRef.current.close();
+                    activeInfoWindowRef.current = null;
+                  }
+
+                  setPendingReportSelection({
+                    name: '',
+                    address,
+                    latitude: latlng.getLat(),
+                    longitude: latlng.getLng(),
+                  });
+                }
+              },
+            );
+          });
+
+          searchConvenienceStores();
+          clearInterval(intervalId);
+        }
+
+        if (attempts >= 60 && !mapRef.current) {
+          setIsMapAvailable(false);
+          clearInterval(intervalId);
+        }
+      }, 200);
+    };
+
+    startMapInit();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (activeInfoWindowRef.current) {
+        activeInfoWindowRef.current.close();
+        activeInfoWindowRef.current = null;
+      }
+      clearMarkers(reportMarkersRef.current);
+      clearMarkers(placeMarkersRef.current);
+    };
+  }, [clearMarkers, ensureKakaoSdk, searchConvenienceStores]);
+
+  useEffect(() => {
+    if (!mapRef.current || !window.kakao?.maps) return;
+
+    clearMarkers(reportMarkersRef.current);
+
     stores.forEach((store) => {
-      // 위도, 경도 값이 유효한지 확인
-      if (store.latitude && store.longitude) {
-        const position = new window.kakao.maps.LatLng(store.latitude, store.longitude);
+      if (!store.latitude || !store.longitude) return;
 
-        const marker = new window.kakao.maps.Marker({
-          map: mapRef.current, // mapRef에 저장된 지도 인스턴스 사용
-          position: position,
-          title: store.name,
-        });
+      const marker = new window.kakao.maps.Marker({
+        map: mapRef.current,
+        position: new window.kakao.maps.LatLng(store.latitude, store.longitude),
+        title: store.name,
+      });
 
-        // (선택) 마커에 인포윈도우(말풍선) 추가
-        const iwContent = `
-          <div style="padding:5px; font-size: 13px;">
+      const infoWindow = new window.kakao.maps.InfoWindow({
+        content: `
+          <div style="padding:6px 8px;font-size:12px;line-height:1.4;max-width:220px;">
             <strong>${store.name}</strong><br/>
             ${store.address}<br/>
             좌석: ${store.available_seats} / ${store.total_seats}
-          </div>`;
-          
-        const infowindow = new window.kakao.maps.InfoWindow({
-          content: iwContent,
-          removable: true
-        });
+          </div>
+        `,
+      });
 
-        // 마커에 클릭 이벤트 등록
-        window.kakao.maps.event.addListener(marker, 'click', () => {
-          infowindow.open(mapRef.current, marker);
-        });
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        if (activeInfoWindowRef.current) {
+          activeInfoWindowRef.current.close();
+        }
+        infoWindow.open(mapRef.current, marker);
+        activeInfoWindowRef.current = infoWindow;
+      });
 
-        // 생성된 마커를 ref 배열에 추가
-        markersRef.current.push(marker);
-      }
+      reportMarkersRef.current.push(marker);
     });
+  }, [clearMarkers, stores]);
 
-    // (선택) 가게가 하나라도 있으면 첫 번째 가게 위치로 지도 중심 이동
-    if (stores.length > 0 && stores[0].latitude && stores[0].longitude) {
-      const firstStorePosition = new window.kakao.maps.LatLng(stores[0].latitude, stores[0].longitude);
-      mapRef.current.setCenter(firstStorePosition);
-    }
+  useEffect(() => {
+    if (!isMapReady) return;
+    searchConvenienceStores(keyword);
+  }, [isMapReady, keyword, searchConvenienceStores, selectedBrand]);
 
-  }, [stores]); // 'stores' prop이 변경될 때마다 이 effect 실행
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    searchConvenienceStores(keyword);
+  };
 
-  
-  // 3. 지도를 렌더링할 div
+  if (!isMapAvailable) {
+    const storesWithCoords = stores.filter((store) => store.latitude && store.longitude).slice(0, 6);
+
+    return (
+      <div className="space-y-3">
+        <div className="w-full rounded-lg border bg-white p-4 text-center shadow-md space-y-2">
+          <MapPin className="h-7 w-7 mx-auto text-gray-400" />
+          <p className="text-sm text-gray-700">카카오 지도 연결이 불안정해 대체 지도를 표시합니다.</p>
+          <p className="text-xs text-gray-500">네트워크가 안정되면 카카오 지도로 자동 전환됩니다.</p>
+        </div>
+
+        <div className="w-full h-80 sm:h-96 rounded-lg border overflow-hidden shadow-md">
+          <iframe
+            title="대체 지도"
+            src="https://www.openstreetmap.org/export/embed.html?bbox=126.85%2C37.45%2C127.15%2C37.65&layer=mapnik"
+            className="w-full h-full border-0"
+            loading="lazy"
+          />
+        </div>
+
+        {storesWithCoords.length > 0 && (
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-sm font-medium text-gray-800 mb-2">제보된 좌표 빠른 선택</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {storesWithCoords.map((store) => (
+                <button
+                  key={store.id}
+                  type="button"
+                  onClick={() =>
+                    onStoreSelect({
+                      name: store.name,
+                      address: store.address,
+                      latitude: store.latitude,
+                      longitude: store.longitude,
+                    })
+                  }
+                  className="text-left rounded-md border p-2 hover:bg-gray-50"
+                >
+                  <div className="text-sm font-medium text-gray-900">{store.name}</div>
+                  <div className="text-xs text-gray-600 line-clamp-1">{store.address}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div 
-      id="map" 
-      ref={mapContainer} 
-      className="w-full h-80 sm:h-96 rounded-lg shadow-md border"
-    >
-      {/* 지도는 여기에 렌더링됩니다. */}
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-white p-3 space-y-3">
+        <form onSubmit={handleSearchSubmit} className="flex items-start gap-2">
+          <div className="relative flex-1">
+            <Input
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setTimeout(() => setIsSearchFocused(false), 120)}
+              placeholder="전체 지역 편의점 검색 (예: 을지로입구, 제주공항)"
+              className="h-10 pr-10 text-base"
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+
+            {isSearchFocused && keyword.trim() && nearbyPlaces.length > 0 && (
+              <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border bg-white shadow-lg">
+                {nearbyPlaces.slice(0, 8).map((place) => (
+                  <button
+                    key={place.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleNearbyPlaceSelect(place);
+                    }}
+                    className="w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                  >
+                    <div className="text-sm font-medium text-slate-900 truncate">{place.name}</div>
+                    <div className="text-xs text-slate-500 truncate">{place.address}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {isSearchFocused && keyword.trim() && !isSearching && nearbyPlaces.length === 0 && (
+              <div className="absolute z-30 mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-500 shadow-lg">
+                관련 이름이 없습니다.
+              </div>
+            )}
+          </div>
+
+          <Button type="submit" className="h-10" disabled={!isMapReady || isSearching}>
+            {isSearching ? '검색중' : '검색'}
+          </Button>
+        </form>
+
+        <div className="flex flex-wrap gap-2">
+          {brandOptions.map((brand) => (
+            <Button
+              key={brand}
+              type="button"
+              variant={selectedBrand === brand ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedBrand(brand)}
+            >
+              {brand === 'all' ? '전체' : brand}
+            </Button>
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={moveToUserLocation}>
+            <Navigation className="h-4 w-4 mr-1" />
+            내 위치
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => searchConvenienceStores(keyword)}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            새로고침
+          </Button>
+        </div>
+
+        {nearbyPlaces.length > 0 && (
+          <div className="text-sm text-gray-600">
+            전체 검색 결과 {nearbyPlaces.length}개. 목록에서 선택해 해당 위치로 이동하거나 핀을 클릭해 확인하세요.
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <div
+          id="map"
+          ref={mapContainer}
+          className="w-full h-80 sm:h-96 md:h-[500px] lg:h-[600px] rounded-lg border shadow-md"
+          aria-label="편의점 위치 지도"
+          role="region"
+        />
+        {!isMapReady && (
+          <div className="absolute inset-0 rounded-lg border bg-white/90 flex items-center justify-center">
+            <div className="text-sm text-gray-600">지도를 불러오는 중...</div>
+          </div>
+        )}
+      </div>
+
+      {pendingReportSelection && (
+        <div className="rounded-lg border bg-white p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <div className="text-sm font-medium text-gray-900">{pendingReportSelection.name || '선택한 위치'}</div>
+            <div className="text-xs text-gray-600 line-clamp-1">{pendingReportSelection.address || '주소 정보 없음'}</div>
+          </div>
+          <Button type="button" onClick={() => onStoreSelect(pendingReportSelection)}>
+            이 위치로 제보하기
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

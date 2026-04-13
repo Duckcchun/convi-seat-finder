@@ -10,7 +10,8 @@ export function QuickBrandButtons({ onBrandSelect, selectedBrand }: QuickBrandBu
   const popularBrands = [
     { name: 'CU', color: 'bg-purple-500 hover:bg-purple-600' },
     { name: 'GS25', color: 'bg-blue-500 hover:bg-blue-600' },
-    { name: '세븐일레븐', color: 'bg-red-500 hover:bg-red-600' },
+    { name: '세븐일레븐', color: 'bg-gray-800 hover:bg-gray-900' },
+
     { name: '이마트24', color: 'bg-yellow-500 hover:bg-yellow-600' },
     { name: '미니스톱', color: 'bg-green-500 hover:bg-green-600' }
   ];

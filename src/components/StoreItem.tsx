@@ -3,8 +3,10 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { MapPin, Clock, User, Trash2, MessageSquare } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Store } from '../types/store';
+import { deleteStore } from '../utils/store-api';
+import { formatDate, formatNotes, getSeatingBadgeStyle, getSeatingStatusText } from '../utils/formatters';
 
 interface StoreItemProps {
   store: Store;
@@ -14,36 +16,10 @@ interface StoreItemProps {
 export function StoreItem({ store, onDelete }: StoreItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getSeatingBadge = (hasSeating: Store['hasSeating']) => {
-    switch (hasSeating) {
-      case 'yes':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">좌석 있음</Badge>;
-      case 'no':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">좌석 없음</Badge>;
-      default:
-        return <Badge variant="secondary">정보 부족</Badge>;
-    }
-  };
-
   const canDelete = () => {
     try {
-      const reportedStores = JSON.parse(localStorage.getItem('reportedStores') || '[]');
-      return reportedStores.includes(store.id);
+      const reportedStores: string[] = JSON.parse(localStorage.getItem('reportedStores') || '[]');
+      return Array.isArray(reportedStores) && reportedStores.includes(store.id);
     } catch {
       return false;
     }
@@ -62,35 +38,28 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
     setIsDeleting(true);
 
     try {
-      const { projectId, publicAnonKey } = await import('../utils/supabase/info');
-      
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-3e44bc02/stores/${store.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
-        }
-      });
+      const isDeleted = await deleteStore(store.id);
 
-      if (response.ok) {
+      if (isDeleted) {
         // 로컬스토리지에서도 제거
         try {
-          const reportedStores = JSON.parse(localStorage.getItem('reportedStores') || '[]');
-          const updatedStores = reportedStores.filter((id: string) => id !== store.id);
-          localStorage.setItem('reportedStores', JSON.stringify(updatedStores));
-        } catch (error) {
-          console.error('로컬스토리지 업데이트 오류:', error);
+          const reportedStores: string[] = JSON.parse(localStorage.getItem('reportedStores') || '[]');
+          if (Array.isArray(reportedStores)) {
+            const updatedStores = reportedStores.filter((id: string) => id !== store.id);
+            localStorage.setItem('reportedStores', JSON.stringify(updatedStores));
+          }
+        } catch {
+          // 로컬스토리지 업데이트 실패는 무시 - 기능에 영향 없음
         }
 
         toast.success('편의점 정보가 삭제되었습니다.');
         onDelete(store.id);
       } else {
-        const errorText = await response.text();
-        console.error('삭제 실패:', errorText);
         toast.error('삭제 중 오류가 발생했습니다.');
       }
-    } catch (error) {
-      console.error('삭제 중 오류:', error);
-      toast.error('네트워크 오류가 발생했습니다.');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+      toast.error(`삭제 중 오류: ${errorMessage}`);
     } finally {
       setIsDeleting(false);
     }
@@ -99,9 +68,9 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
-            <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start justify-between mb-2 gap-3">
               <div>
                 <h3 className="font-medium text-lg">{store.name}</h3>
                 <div className="flex items-center text-gray-600 text-sm mt-1">
@@ -109,10 +78,17 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                   <span>{store.address}</span>
                 </div>
               </div>
-              {getSeatingBadge(store.hasSeating)}
+              {(() => {
+                const { bg, text } = getSeatingBadgeStyle(store.hasSeating);
+                return (
+                  <Badge className={`${bg} ${text} hover:${bg}`}>
+                    {getSeatingStatusText(store.hasSeating)}
+                  </Badge>
+                );
+              })()}
             </div>
 
-            <div className="flex items-center space-x-4 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-500">
               <div className="flex items-center">
                 <Clock className="h-3 w-3 mr-1" />
                 <span>{formatDate(store.lastUpdated)}</span>
@@ -126,10 +102,10 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
             </div>
 
             {store.notes && (
-              <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
+              <div className="mt-2 rounded bg-gray-50 p-2.5 text-sm">
                 <div className="flex items-start">
                   <MessageSquare className="h-3 w-3 mr-1 mt-0.5 text-gray-400" />
-                  <span className="text-gray-700">{store.notes}</span>
+                  <span className="text-gray-700">{formatNotes(store.notes, store.hasSeating)}</span>
                 </div>
               </div>
             )}
@@ -141,7 +117,7 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="ml-4 text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="ml-3 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <Trash2 className="h-4 w-4" />
               {isDeleting ? '삭제 중...' : '삭제'}

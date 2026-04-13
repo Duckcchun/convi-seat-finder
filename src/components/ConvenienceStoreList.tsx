@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StoreItem } from './StoreItem';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -13,6 +13,8 @@ interface ConvenienceStoreListProps {
   onDelete: (storeId: string) => void;
 }
 
+const ITEMS_PER_PAGE = 20; // 한 번에 보여줄 항목 수
+
 export function ConvenienceStoreList({ 
   stores, 
   isLoading, 
@@ -21,10 +23,13 @@ export function ConvenienceStoreList({
 }: ConvenienceStoreListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredStores, setFilteredStores] = useState(stores);
+  const [displayedItemsCount, setDisplayedItemsCount] = useState(ITEMS_PER_PAGE);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   // 검색 기능
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    setDisplayedItemsCount(ITEMS_PER_PAGE); // 검색 시 초기값으로 리셋
     
     if (!query.trim()) {
       setFilteredStores(stores);
@@ -44,11 +49,13 @@ export function ConvenienceStoreList({
 
   const handleClear = useCallback(() => {
     setSearchQuery('');
+    setDisplayedItemsCount(ITEMS_PER_PAGE);
     setFilteredStores(stores);
   }, [stores]);
 
-  // stores가 변경될 때마다 필터링된 목록 업데이트
+  // stores가 변경될 때마다 필터링된 목록 업데이트 및 카운트 리셋
   useEffect(() => {
+    setDisplayedItemsCount(ITEMS_PER_PAGE);
     if (searchQuery.trim()) {
       const filtered = stores.filter(
         (store) =>
@@ -64,16 +71,35 @@ export function ConvenienceStoreList({
     }
   }, [stores, searchQuery]);
 
-  const displayedStores = filteredStores;
+  // 무한 스크롤: 마지막 요소가 보일 때 더 많은 아이템 로드
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && displayedItemsCount < filteredStores.length) {
+          setDisplayedItemsCount(prev => prev + ITEMS_PER_PAGE);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [displayedItemsCount, filteredStores.length]);
+
+  const displayedStores = filteredStores.slice(0, displayedItemsCount);
   const hasSeatingCount = displayedStores.filter(store => store.hasSeating === 'yes').length;
   const noSeatingCount = displayedStores.filter(store => store.hasSeating === 'no').length;
   const unknownCount = displayedStores.filter(store => store.hasSeating === 'unknown').length;
+  const hasMoreItems = displayedItemsCount < filteredStores.length;
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center space-x-2">
+    <Card className="w-full gap-4">
+      <CardHeader className="px-6 pb-2 pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className="flex items-center space-x-2 text-lg font-semibold">
             <List className="h-5 w-5" />
             <span>제보된 편의점 목록</span>
           </CardTitle>
@@ -82,13 +108,14 @@ export function ConvenienceStoreList({
             size="sm" 
             onClick={onRefresh}
             disabled={isLoading}
+            className="shrink-0"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             새로고침
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 px-6 pb-5 pt-0">
         {/* 검색 바 */}
         <div className="flex space-x-2">
           <div className="relative flex-1">
@@ -115,7 +142,7 @@ export function ConvenienceStoreList({
         </div>
 
         {/* 통계 정보 */}
-        <div className="flex flex-wrap gap-2 text-sm">
+        <div className="flex flex-wrap gap-2.5 text-sm">
           <div className="px-3 py-1 bg-gray-100 rounded-full">
             전체: {displayedStores.length}개
           </div>
@@ -169,6 +196,18 @@ export function ConvenienceStoreList({
                 onDelete={onDelete}
               />
             ))}
+            
+            {/* 무한 스크롤 트리거 */}
+            <div ref={observerTarget} className="h-8" />
+            
+            {/* 더 로드 중 표시 */}
+            {hasMoreItems && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-pulse text-sm text-gray-500">
+                  더 불러오는 중... ({displayedItemsCount} / {filteredStores.length})
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
