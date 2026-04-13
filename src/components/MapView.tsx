@@ -446,7 +446,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   }, [clearMarkers, ensureKakaoSdk, mapInitKey]);
 
   useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps) return;
+    if (!isMapReady || !mapRef.current || !window.kakao?.maps) return;
 
     clearMarkers(reportMarkersRef.current);
 
@@ -479,7 +479,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
       reportMarkersRef.current.push(marker);
     });
-  }, [clearMarkers, stores]);
+  }, [clearMarkers, isMapReady, stores]);
 
   useEffect(() => {
     if (!isMapReady) return;
