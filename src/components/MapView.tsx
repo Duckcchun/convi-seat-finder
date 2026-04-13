@@ -39,11 +39,13 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchInputResetKey, setSearchInputResetKey] = useState(0);
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [pendingReportSelection, setPendingReportSelection] = useState<StoreSelectInfo | null>(null);
 
   const mapContainer = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<any>(null);
   const reportMarkersRef = useRef<any[]>([]);
   const placeMarkersRef = useRef<any[]>([]);
@@ -110,6 +112,49 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     },
     [extractBrand, normalizeText, stores],
   );
+
+  const buildSeatSummary = useCallback((store: Store) => {
+    if (store.total_seats > 0) {
+      if (store.available_seats > 0) {
+        return `좌석: 총 ${store.total_seats}석 (현재 ${store.available_seats}석 이용 가능)`;
+      }
+      return `좌석: 총 ${store.total_seats}석`;
+    }
+
+    if (store.hasSeating === 'yes') return '좌석: 있음';
+    if (store.hasSeating === 'no') return '좌석: 없음';
+    return '좌석: 확인 필요';
+  }, []);
+
+  const buildInfoWindowContent = useCallback(
+    (name: string, address: string, store?: Store) => {
+      const seatSummary = store ? buildSeatSummary(store) : '좌석: 확인 필요';
+      const notes = store?.notes || '좌석 형태/비고 정보가 아직 없습니다.';
+
+      return `
+        <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
+          <strong style="font-size:12px;display:block;margin-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;">${name}</strong>
+          <div style="color:#666;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">
+            ${address}
+          </div>
+          <div style="color:#d32f2f;font-weight:bold;margin-bottom:4px;">${seatSummary}</div>
+          <div style="margin-top:4px;padding:6px;background-color:#f5f5f5;border-radius:3px;color:#333;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">${notes}</div>
+        </div>
+      `;
+    },
+    [buildSeatSummary],
+  );
+
+  const refreshSearchInteraction = useCallback(() => {
+    setIsSearching(false);
+    setIsSearchFocused(false);
+    setNearbyPlaces([]);
+    setSearchInputResetKey((prev) => prev + 1);
+
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 60);
+  }, []);
 
   const resolveKakaoApiKey = useCallback(async (): Promise<string> => {
     const toPreview = (value: string) =>
@@ -287,22 +332,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             const matchedStore = findBestMatchedStore(place);
 
             const infoWindow = new window.kakao.maps.InfoWindow({
-              content: `
-                <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
-                  <strong style="font-size:12px;display:block;margin-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;">${place.name}</strong>
-                  <div style="color:#666;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">
-                    ${place.address}
-                  </div>
-                  ${matchedStore
-                    ? `
-                      <div>
-                        <div style="color:#d32f2f;font-weight:bold;margin-bottom:4px;">좌석: ${matchedStore.hasSeating === 'yes' ? '있음' : matchedStore.hasSeating === 'no' ? '없음' : '확인 필요'}</div>
-                        ${matchedStore.notes ? `<div style="margin-top:4px;padding:6px;background-color:#f5f5f5;border-radius:3px;color:#333;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">${matchedStore.notes}</div>` : ''}
-                      </div>
-                    `
-                    : '<div style="color:#666;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">아직 제보된 좌석 정보가 없습니다.</div>'}
-                </div>
-              `,
+              content: buildInfoWindowContent(place.name, place.address, matchedStore),
             });
 
             window.kakao.maps.event.addListener(marker, 'click', () => {
@@ -330,7 +360,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         },
       );
     },
-    [clearMarkers, findBestMatchedStore, isMapReady, selectedBrand, stores],
+    [buildInfoWindowContent, clearMarkers, findBestMatchedStore, isMapReady, selectedBrand, stores],
   );
 
   const handleNearbyPlaceSelect = useCallback((place: NearbyPlace) => {
@@ -347,8 +377,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       longitude: place.longitude,
     });
     setKeyword(place.name);
-    setIsSearchFocused(false);
-  }, []);
+    refreshSearchInteraction();
+  }, [refreshSearchInteraction]);
 
   useEffect(() => {
     let cancelled = false;
@@ -507,13 +537,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       });
 
       const infoWindow = new window.kakao.maps.InfoWindow({
-        content: `
-          <div style="padding:6px 8px;font-size:12px;line-height:1.4;max-width:220px;">
-            <strong>${store.name}</strong><br/>
-            ${store.address}<br/>
-            좌석: ${store.available_seats} / ${store.total_seats}
-          </div>
-        `,
+        content: buildInfoWindowContent(store.name, store.address, store),
       });
 
       window.kakao.maps.event.addListener(marker, 'click', () => {
@@ -526,7 +550,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
       reportMarkersRef.current.push(marker);
     });
-  }, [clearMarkers, isMapReady, stores]);
+  }, [buildInfoWindowContent, clearMarkers, isMapReady, stores]);
 
   useEffect(() => {
     if (!isMapReady) return;
@@ -576,6 +600,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         <form onSubmit={handleSearchSubmit} className="flex items-start gap-2">
           <div className="relative flex-1">
             <Input
+              key={searchInputResetKey}
+              ref={searchInputRef}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}

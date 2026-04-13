@@ -191,11 +191,6 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
         store.address.trim().toLowerCase() === normalizedAddress,
     );
 
-    if (isAlreadyReported) {
-      toast.error('이미 제보된 편의점입니다.');
-      return;
-    }
-
     try {
       let payload: StoreFormData = { ...data };
 
@@ -222,7 +217,7 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
         // 로컬스토리지 저장 실패는 무시 - 기능에 영향 없음
       }
 
-      toast.success('편의점 정보가 성공적으로 제보되었습니다!');
+      toast.success(isAlreadyReported ? '기존 편의점 정보가 업데이트되었습니다!' : '편의점 정보가 성공적으로 제보되었습니다!');
 
       reset({
         name: '',
@@ -326,7 +321,7 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
                     disabled={isSubmitting}
                     onClick={() => setValue('hasSeating', option.id)}
                     aria-pressed={isSelected}
-                    className={`flex min-h-[64px] w-full items-center rounded-lg border-2 gap-2.5 px-3 py-2 text-left transition-colors duration-200 ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                    className={`flex min-h-16 w-full items-center rounded-lg border-2 gap-2.5 px-3 py-2 text-left transition-colors duration-200 ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                     style={{
                       backgroundColor: currentStyle.containerBg,
                       borderColor: currentStyle.containerBorder,
@@ -423,14 +418,14 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
                 이미 제보된 위치입니다
               </div>
               <p className="mt-2 text-sm text-amber-700">
-                다른 편의점을 검색하거나 기존 정보를 업데이트해주세요
+                제출하면 기존 제보에 상세 정보가 반영됩니다
               </p>
             </div>
           )}
           <Button 
             type="submit" 
             className="h-12 w-full bg-blue-600 text-base font-medium hover:bg-blue-700 mt-4" 
-            disabled={isSubmitting || isAlreadyReported}
+            disabled={isSubmitting}
           >
             {isSubmitting ? (
               <div className="flex items-center">
