@@ -51,6 +51,66 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const searchServiceRef = useRef<any>(null);
   const activeInfoWindowRef = useRef<any>(null);
 
+  const normalizeText = useCallback((value: string) => {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[()\-_/.,]/g, '');
+  }, []);
+
+  const extractBrand = useCallback((value: string) => {
+    const brands = ['CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
+    return brands.find((brand) => String(value || '').includes(brand));
+  }, []);
+
+  const findBestMatchedStore = useCallback(
+    (place: NearbyPlace) => {
+      const placeNameNorm = normalizeText(place.name);
+      const placeAddressNorm = normalizeText(place.address);
+      const placeBrand = extractBrand(place.name);
+
+      let best: { store: Store; score: number } | null = null;
+
+      for (const store of stores) {
+        let score = 0;
+        const storeNameNorm = normalizeText(store.name);
+        const storeAddressNorm = normalizeText(store.address);
+
+        if (storeNameNorm === placeNameNorm) score += 120;
+        if (storeAddressNorm && storeAddressNorm === placeAddressNorm) score += 90;
+        if (storeNameNorm.includes(placeNameNorm) || placeNameNorm.includes(storeNameNorm)) score += 50;
+        if (
+          storeAddressNorm &&
+          placeAddressNorm &&
+          (storeAddressNorm.includes(placeAddressNorm) || placeAddressNorm.includes(storeAddressNorm))
+        ) {
+          score += 30;
+        }
+
+        const storeBrand = extractBrand(store.name);
+        if (placeBrand && storeBrand && placeBrand === storeBrand) {
+          score += 15;
+        }
+
+        if (typeof store.latitude === 'number' && typeof store.longitude === 'number') {
+          const dLat = Math.abs(store.latitude - place.latitude);
+          const dLng = Math.abs(store.longitude - place.longitude);
+
+          if (dLat < 0.0004 && dLng < 0.0004) score += 80;
+          else if (dLat < 0.001 && dLng < 0.001) score += 45;
+          else if (dLat < 0.002 && dLng < 0.002) score += 20;
+        }
+
+        if (!best || score > best.score) {
+          best = { store, score };
+        }
+      }
+
+      return best && best.score >= 40 ? best.store : undefined;
+    },
+    [extractBrand, normalizeText, stores],
+  );
+
   const resolveKakaoApiKey = useCallback(async (): Promise<string> => {
     const toPreview = (value: string) =>
       value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
@@ -224,15 +284,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
               title: place.name,
             });
 
-            const matchedStore = stores.find(
-              (store) =>
-                store.name === place.name ||
-                store.address === place.address ||
-                (store.latitude &&
-                  store.longitude &&
-                  Math.abs(store.latitude - place.latitude) < 0.0003 &&
-                  Math.abs(store.longitude - place.longitude) < 0.0003),
-            );
+            const matchedStore = findBestMatchedStore(place);
 
             const infoWindow = new window.kakao.maps.InfoWindow({
               content: `
@@ -278,7 +330,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         },
       );
     },
-    [clearMarkers, isMapReady, selectedBrand, stores],
+    [clearMarkers, findBestMatchedStore, isMapReady, selectedBrand, stores],
   );
 
   const handleNearbyPlaceSelect = useCallback((place: NearbyPlace) => {
