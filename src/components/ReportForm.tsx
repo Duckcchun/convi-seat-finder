@@ -6,8 +6,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
-import { createStore } from '../utils/store-api';
-import type { StoreFormData, StoreSelectInfo } from '../types/store';
+import { createStore, updateStore } from '../utils/store-api';
+import type { StoreFormData, StoreSelectInfo, Store } from '../types/store';
 import { MapPin, User, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { getErrorMessage } from '../utils/errorHandler';
@@ -15,7 +15,9 @@ import { validateField, type StoreFormSchema } from '../utils/validation';
 
 interface ReportFormProps {
   onSuccess: () => void;
-  initialData?: StoreSelectInfo;
+  initialData?: StoreSelectInfo | Store;
+  storeId?: string;
+  actionType?: 'add' | 'edit' | 'warning';
 }
 
 type SeatOption = {
@@ -110,7 +112,7 @@ const SEAT_OPTIONS: SeatOption[] = [
   },
 ];
 
-export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
+export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add' }: ReportFormProps) {
   const { stores } = useStore();
 
   const {
@@ -141,8 +143,16 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
       setValue('address', initialData.address);
       if (initialData.latitude) setValue('latitude', initialData.latitude);
       if (initialData.longitude) setValue('longitude', initialData.longitude);
+      
+      // Store 타입의 경우 추가 필드 처리
+      if ('hasSeating' in initialData) {
+        setValue('hasSeating', initialData.hasSeating);
+      }
+      if ('notes' in initialData && initialData.notes) {
+        setValue('notes', initialData.notes);
+      }
     }
-  }, [initialData, setValue]);
+  }, [initialData, setValue, storeId]);
 
   const handleStoreSearchSelect = useCallback((storeInfo: StoreSelectInfo) => {
     setValue('name', storeInfo.name);
@@ -188,7 +198,8 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
     const isAlreadyReported = stores.some(
       (store) =>
         store.name.trim().toLowerCase() === normalizedName &&
-        store.address.trim().toLowerCase() === normalizedAddress,
+        store.address.trim().toLowerCase() === normalizedAddress &&
+        store.id !== storeId, // 현재 편집 중인 storeId는 제외
     );
 
     try {
@@ -205,19 +216,43 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
         }
       }
 
-      const savedStore = await createStore(payload);
+      let savedStore: Store;
+      
+      if (storeId) {
+        // 수정 모드: 기존 매장 ID를 유지한 채 업데이트
+        const updated = await updateStore(storeId, {
+          name: payload.name.trim(),
+          address: payload.address.trim(),
+          hasSeating: payload.hasSeating,
+          reportedBy: payload.reporterName?.trim() || undefined,
+          notes: payload.notes?.trim() || undefined,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          available_seats: payload.hasSeating === 'yes' ? 1 : 0,
+          total_seats: payload.hasSeating === 'yes' ? 1 : 0,
+        });
 
-      try {
-        const reportedStores: string[] = JSON.parse(localStorage.getItem('reportedStores') || '[]');
-        if (Array.isArray(reportedStores) && !reportedStores.includes(savedStore.id)) {
-          reportedStores.push(savedStore.id);
-          localStorage.setItem('reportedStores', JSON.stringify(reportedStores));
+        if (!updated) {
+          throw new Error('수정할 편의점을 찾지 못했습니다. 다시 시도해주세요.');
         }
-      } catch {
-        // 로컬스토리지 저장 실패는 무시 - 기능에 영향 없음
-      }
 
-      toast.success(isAlreadyReported ? '기존 편의점 정보가 업데이트되었습니다!' : '편의점 정보가 성공적으로 제보되었습니다!');
+        savedStore = updated;
+      } else {
+        // 신규 제보 모드
+        savedStore = await createStore(payload);
+
+        try {
+          const reportedStores: string[] = JSON.parse(localStorage.getItem('reportedStores') || '[]');
+          if (Array.isArray(reportedStores) && !reportedStores.includes(savedStore.id)) {
+            reportedStores.push(savedStore.id);
+            localStorage.setItem('reportedStores', JSON.stringify(reportedStores));
+          }
+        } catch {
+          // 로컬스토리지 저장 실패는 무시 - 기능에 영향 없음
+        }
+
+        toast.success(isAlreadyReported ? '기존 편의점 정보가 업데이트되었습니다!' : '편의점 정보가 성공적으로 제보되었습니다!');
+      }
 
       reset({
         name: '',
@@ -228,6 +263,15 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
         latitude: undefined,
         longitude: undefined,
       });
+
+      // actionType에 따라 다른 토스트 메시지 표시
+      if (actionType === 'add') {
+        toast.success('✅ 편의점 정보가 추가되었습니다');
+      } else if (actionType === 'warning') {
+        toast.success('⚠️ 정보가 제보되었습니다. 감사합니다!');
+      } else {
+        toast.success('✏️ 편의점 정보가 수정되었습니다');
+      }
 
       onSuccess();
     } catch (error: unknown) {
@@ -411,7 +455,7 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
         </div>
 
         <div className="mt-6 pt-8 border-t border-slate-100">
-          {isAlreadyReported && (
+          {isAlreadyReported && !storeId && (
             <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
               <div className="flex items-center justify-center font-medium text-amber-800">
                 <AlertCircle className="mr-2 h-5 w-5" />
@@ -430,12 +474,12 @@ export function ReportForm({ onSuccess, initialData }: ReportFormProps) {
             {isSubmitting ? (
               <div className="flex items-center">
                 <div className="mr-3 h-5 w-5 animate-spin rounded-full border-b-2 border-white" />
-                제보 중...
+                {storeId ? '수정 중...' : '제보 중...'}
               </div>
             ) : (
               <div className="flex items-center">
                 <CheckCircle2 className="mr-2 h-5 w-5" />
-                정보 제보하기
+                {storeId ? '정보 수정하기' : '정보 제보하기'}
               </div>
             )}
           </Button>

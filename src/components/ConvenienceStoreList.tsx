@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { StoreItem } from './StoreItem';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -22,54 +22,67 @@ export function ConvenienceStoreList({
   onDelete 
 }: ConvenienceStoreListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('all');
   const [filteredStores, setFilteredStores] = useState(stores);
   const [displayedItemsCount, setDisplayedItemsCount] = useState(ITEMS_PER_PAGE);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const brandOptions = ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
+
+  const filterStores = useCallback(
+    (query: string, brand: string) => {
+      const normalizedQuery = query.trim().toLowerCase();
+
+      return stores.filter((store) => {
+        if (!store || !store.name || !store.address) return false;
+
+        if (brand !== 'all' && !store.name.includes(brand)) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return (
+          store.name.toLowerCase().includes(normalizedQuery) ||
+          store.address.toLowerCase().includes(normalizedQuery)
+        );
+      });
+    },
+    [stores],
+  );
 
   // 검색 기능
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     setDisplayedItemsCount(ITEMS_PER_PAGE); // 검색 시 초기값으로 리셋
-    
-    if (!query.trim()) {
-      setFilteredStores(stores);
-      return;
-    }
-
-    const filtered = stores.filter(
-      (store) =>
-        store &&
-        store.name &&
-        store.address &&
-        (store.name.toLowerCase().includes(query.toLowerCase()) ||
-        store.address.toLowerCase().includes(query.toLowerCase()))
-    );
-    setFilteredStores(filtered);
-  }, [stores]);
+    setFilteredStores(filterStores(query, selectedBrand));
+  }, [filterStores, selectedBrand]);
 
   const handleClear = useCallback(() => {
     setSearchQuery('');
     setDisplayedItemsCount(ITEMS_PER_PAGE);
-    setFilteredStores(stores);
-  }, [stores]);
+    setFilteredStores(filterStores('', selectedBrand));
+  }, [filterStores, selectedBrand]);
 
-  // stores가 변경될 때마다 필터링된 목록 업데이트 및 카운트 리셋
+  // stores가 변경될 때마다 필터링된 목록만 업데이트
+  useEffect(() => {
+    setFilteredStores(filterStores(searchQuery, selectedBrand));
+  }, [filterStores, searchQuery, selectedBrand]);
+
   useEffect(() => {
     setDisplayedItemsCount(ITEMS_PER_PAGE);
-    if (searchQuery.trim()) {
-      const filtered = stores.filter(
-        (store) =>
-          store &&
-          store.name &&
-          store.address &&
-          (store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          store.address.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-      setFilteredStores(filtered);
-    } else {
-      setFilteredStores(stores);
-    }
-  }, [stores, searchQuery]);
+  }, [selectedBrand]);
+
+  // 검색어 변경 시에만 표시 개수를 초기화
+  useEffect(() => {
+    setDisplayedItemsCount(ITEMS_PER_PAGE);
+  }, [searchQuery]);
+
+  // 필터 결과 길이가 줄어든 경우 현재 표시 개수를 안전하게 보정
+  useEffect(() => {
+    setDisplayedItemsCount((prev) => Math.min(Math.max(prev, ITEMS_PER_PAGE), filteredStores.length || ITEMS_PER_PAGE));
+  }, [filteredStores.length]);
 
   // 무한 스크롤: 마지막 요소가 보일 때 더 많은 아이템 로드
   useEffect(() => {
@@ -79,7 +92,10 @@ export function ConvenienceStoreList({
           setDisplayedItemsCount(prev => prev + ITEMS_PER_PAGE);
         }
       },
-      { threshold: 0.1 }
+      {
+        threshold: 0,
+        rootMargin: '450px 0px',
+      }
     );
 
     if (observerTarget.current) {
@@ -141,18 +157,32 @@ export function ConvenienceStoreList({
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          {brandOptions.map((brand) => (
+            <Button
+              key={brand}
+              type="button"
+              variant={selectedBrand === brand ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedBrand(brand)}
+            >
+              {brand === 'all' ? '전체' : brand}
+            </Button>
+          ))}
+        </div>
+
         {/* 통계 정보 */}
-        <div className="flex flex-wrap gap-2.5 text-sm">
-          <div className="px-3 py-1 bg-gray-100 rounded-full">
-            전체: {displayedStores.length}개
+        <div className="flex flex-wrap gap-y-2 text-xs" style={{ gap: '0 0.35rem' }}>
+          <div className="px-3 py-1 bg-gray-100 rounded-full whitespace-nowrap">
+            전체: {filteredStores.length}개
           </div>
-          <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full">
+          <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full whitespace-nowrap">
             좌석 있음: {hasSeatingCount}개
           </div>
-          <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full">
+          <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full whitespace-nowrap">
             좌석 없음: {noSeatingCount}개
           </div>
-          <div className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full">
+          <div className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full whitespace-nowrap">
             정보 부족: {unknownCount}개
           </div>
         </div>

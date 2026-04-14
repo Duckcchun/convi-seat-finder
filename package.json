@@ -69,6 +69,7 @@
             "test": "vitest",
             "test:ui": "vitest --ui",
             "test:coverage": "vitest --coverage",
+            "seed:generate": "node seed-generator.js",
             "predeploy": "npm run build",
             "deploy": "gh-pages -d build"
       },

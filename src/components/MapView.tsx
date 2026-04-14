@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Store, StoreSelectInfo } from '../types/store';
-import { MapPin, Navigation, RefreshCw, Search } from 'lucide-react';
+import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Sheet, SheetContent } from './ui/sheet';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
 import { toast } from 'sonner';
+import { ReportForm } from './ReportForm';
+import { getSeatingBadgeStyle, getSeatingStatusText, formatDate } from '../utils/formatters';
+import { useStore } from '../context/StoreContext';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { getGeolocationErrorMessage } from '../utils/errorHandler';
 
@@ -36,6 +42,7 @@ interface MapViewProps {
 }
 
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
+  const { refreshStores } = useStore();
   const [isMapAvailable, setIsMapAvailable] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -48,6 +55,10 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [pendingReportSelection, setPendingReportSelection] = useState<StoreSelectInfo | null>(null);
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditingStore, setIsEditingStore] = useState(false);
+  const [actionType, setActionType] = useState<'add' | 'edit' | 'warning'>('add');
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -119,13 +130,6 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   );
 
   const buildSeatSummary = useCallback((store: Store) => {
-    if (store.total_seats > 0) {
-      if (store.available_seats > 0) {
-        return `좌석: 총 ${store.total_seats}석 (현재 ${store.available_seats}석 이용 가능)`;
-      }
-      return `좌석: 총 ${store.total_seats}석`;
-    }
-
     if (store.hasSeating === 'yes') return '좌석: 있음';
     if (store.hasSeating === 'no') return '좌석: 없음';
     return '좌석: 확인 필요';
@@ -134,7 +138,15 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const buildInfoWindowContent = useCallback(
     (name: string, address: string, store?: Store) => {
       const seatSummary = store ? buildSeatSummary(store) : '좌석: 확인 필요';
-      const notes = store?.notes || '좌석 형태/비고 정보가 아직 없습니다.';
+      const isOfflineGuide = store?.reportedBy === '오프라인 가이드';
+      const baseNotes = store?.notes || '좌석 형태/비고 정보가 아직 없습니다.';
+      const notes = isOfflineGuide
+        ? `${baseNotes} | 안내: 실제 매장명/상세 주소와 차이가 있을 수 있습니다.`
+        : baseNotes;
+
+      const buttonHtml = store && store.hasSeating !== 'unknown'
+        ? `<button data-infowindow-action="edit" data-store-id="${store.id}" style="width:100%;padding:12px 16px;margin-top:10px;background-color:#f59e0b;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;">⚠️ 실제와 다른가요?</button>`
+        : `<button data-infowindow-action="add" style="width:100%;padding:12px 16px;margin-top:10px;background-color:#3b82f6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;">정보 추가하기</button>`;
 
       return `
         <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
@@ -144,11 +156,52 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           </div>
           <div style="color:#d32f2f;font-weight:bold;margin-bottom:4px;">${seatSummary}</div>
           <div style="margin-top:4px;padding:6px;background-color:#f5f5f5;border-radius:3px;color:#333;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">${notes}</div>
+          ${buttonHtml}
         </div>
       `;
     },
     [buildSeatSummary],
   );
+
+  const attachInfoWindowButtonListener = useCallback((matchedStore?: Store, place?: NearbyPlace) => {
+    setTimeout(() => {
+      const button = document.querySelector('[data-infowindow-action]') as HTMLButtonElement;
+      if (!button) return;
+
+      button.addEventListener('click', () => {
+        const action = button.getAttribute('data-infowindow-action');
+        if (action === 'add') {
+          // 정보 추가 모드로 Sheet 열기
+          setActionType('add');
+          if (matchedStore && matchedStore.hasSeating === 'unknown') {
+            // store는 있지만 좌석 정보가 없는 경우: 기존 정보를 불러와서 수정
+            setSelectedStore(matchedStore);
+            setIsEditingStore(true);
+            setIsEditDialogOpen(true);
+          } else if (place) {
+            // store가 없는 경우: 새로운 정보 추가
+            setPendingReportSelection({
+              name: place.name,
+              address: place.address,
+              latitude: place.latitude,
+              longitude: place.longitude,
+            });
+            setIsEditDialogOpen(true);
+          } else {
+            setIsEditDialogOpen(true);
+          }
+        } else if (action === 'edit') {
+          // 정보 수정 모드로 Sheet 열기
+          setActionType('warning');
+          if (matchedStore) {
+            setSelectedStore(matchedStore);
+            setIsEditingStore(true);
+            setIsEditDialogOpen(true);
+          }
+        }
+      });
+    }, 50);
+  }, []);
 
   const refreshSearchInteraction = useCallback(() => {
     setIsSearching(false);
@@ -165,8 +218,16 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     const toPreview = (value: string) =>
       value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
 
+    const localEnvKey = import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined;
+
+    // 로컬 env 키가 있으면 원격 함수 조회를 건너뛰어 404/지연을 피한다.
+    if (localEnvKey) {
+      setResolvedKeyPreview(toPreview(localEnvKey));
+      return localEnvKey;
+    }
+
     if (!REMOTE_ENABLED) {
-      const key = (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+      const key = KAKAO_FALLBACK_KEY;
       setResolvedKeyPreview(toPreview(key));
       return key;
     }
@@ -198,7 +259,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       // Supabase 경로 실패 시 로컬 값으로 폴백
     }
 
-    const fallback = (import.meta.env.VITE_KAKAO_MAP_API_KEY as string | undefined) || KAKAO_FALLBACK_KEY;
+    const fallback = KAKAO_FALLBACK_KEY;
     setResolvedKeyPreview(toPreview(fallback));
     return fallback;
   }, []);
@@ -259,6 +320,46 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
   const brandOptions = useMemo(() => ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'], []);
 
+  const hasSearchQuery = keyword.trim().length > 0;
+  const hasNearbyResults = hasSearchQuery && nearbyPlaces.length > 0;
+  const hasNoNearbyResults = hasSearchQuery && !isSearching && nearbyPlaces.length === 0;
+
+  const getOfflineMatches = useCallback(
+    (inputKeyword: string) => {
+      const normalizedKeyword = normalizeText(inputKeyword);
+      if (!normalizedKeyword) return [] as NearbyPlace[];
+
+      return stores
+        .filter((store) => {
+          if (selectedBrand !== 'all' && !String(store.name || '').includes(selectedBrand)) {
+            return false;
+          }
+
+          if (typeof store.latitude !== 'number' || typeof store.longitude !== 'number') {
+            return false;
+          }
+
+          const normalizedName = normalizeText(store.name);
+          const normalizedAddress = normalizeText(store.address);
+
+          return (
+            normalizedName.includes(normalizedKeyword) ||
+            normalizedAddress.includes(normalizedKeyword) ||
+            normalizedKeyword.includes(normalizedName)
+          );
+        })
+        .slice(0, 12)
+        .map((store) => ({
+          id: `offline-${store.id}`,
+          name: store.name,
+          address: store.address,
+          latitude: Number(store.latitude),
+          longitude: Number(store.longitude),
+        }));
+    },
+    [normalizeText, selectedBrand, stores],
+  );
+
   const clearMarkers = useCallback((target: any[]) => {
     target.forEach((marker) => marker.setMap(null));
     target.length = 0;
@@ -291,8 +392,10 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     (inputKeyword?: string) => {
       if (!isMapReady || !searchServiceRef.current || !window.kakao?.maps?.services) return;
 
-      const queryBase = inputKeyword?.trim()
-        ? `${inputKeyword.trim()} 편의점`
+      const trimmedKeyword = inputKeyword?.trim() || '';
+
+      const queryBase = trimmedKeyword
+        ? `${trimmedKeyword} 편의점`
         : selectedBrand === 'all'
           ? '편의점'
           : `${selectedBrand} 편의점`;
@@ -324,10 +427,24 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
               longitude: Number(place.x),
             }));
 
-          setNearbyPlaces(filtered);
+          const offlineMatches = getOfflineMatches(trimmedKeyword);
+          const mergedPlaces = [...filtered];
+          const placeKeys = new Set(
+            filtered.map((place) => `${normalizeText(place.name)}::${normalizeText(place.address)}`),
+          );
+
+          offlineMatches.forEach((place) => {
+            const key = `${normalizeText(place.name)}::${normalizeText(place.address)}`;
+            if (!placeKeys.has(key)) {
+              placeKeys.add(key);
+              mergedPlaces.push(place);
+            }
+          });
+
+          setNearbyPlaces(mergedPlaces);
           clearMarkers(placeMarkersRef.current);
 
-          filtered.forEach((place) => {
+          mergedPlaces.forEach((place) => {
             const marker = new window.kakao.maps.Marker({
               map: mapRef.current,
               position: new window.kakao.maps.LatLng(place.latitude, place.longitude),
@@ -354,6 +471,9 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
                 latitude: storeToSelect.latitude,
                 longitude: storeToSelect.longitude,
               });
+
+              // infowindow 버튼 이벤트 리스너 추가
+              attachInfoWindowButtonListener(matchedStore, place);
             });
 
             placeMarkersRef.current.push(marker);
@@ -365,7 +485,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         },
       );
     },
-    [buildInfoWindowContent, clearMarkers, findBestMatchedStore, isMapReady, selectedBrand, stores],
+    [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand],
   );
 
   const handleNearbyPlaceSelect = useCallback((place: NearbyPlace) => {
@@ -551,11 +671,32 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         }
         infoWindow.open(mapRef.current, marker);
         activeInfoWindowRef.current = infoWindow;
+        // infowindow 버튼 이벤트 리스너 추가
+        attachInfoWindowButtonListener(store);
       });
 
       reportMarkersRef.current.push(marker);
     });
-  }, [buildInfoWindowContent, clearMarkers, isMapReady, stores]);
+  }, [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, isMapReady, stores]);
+
+  // selectedStore가 업데이트되면 infowindow도 자동으로 갱신
+  useEffect(() => {
+    if (!selectedStore || !isMapReady || !window.kakao?.maps) return;
+
+    // stores에서 업데이트된 store 정보 찾기
+    const updatedStore = stores.find(s => s.id === selectedStore.id);
+    if (updatedStore && updatedStore !== selectedStore) {
+      setSelectedStore(updatedStore);
+    }
+
+    // infowindow 내용 업데이트
+    if (activeInfoWindowRef.current && updatedStore) {
+      const newContent = buildInfoWindowContent(updatedStore.name, updatedStore.address, updatedStore);
+      activeInfoWindowRef.current.setContent(newContent);
+      // 업데이트된 버튼 리스너 재등록
+      attachInfoWindowButtonListener(updatedStore);
+    }
+  }, [stores, selectedStore, isMapReady, buildInfoWindowContent, attachInfoWindowButtonListener]);
 
   useEffect(() => {
     if (!isMapReady) return;
@@ -617,37 +758,39 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
             </div>
-
-            {isSearchFocused && keyword.trim() && nearbyPlaces.length > 0 && (
-              <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border bg-white shadow-lg">
-                {nearbyPlaces.slice(0, 8).map((place) => (
-                  <button
-                    key={place.id}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleNearbyPlaceSelect(place);
-                    }}
-                    className="w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
-                  >
-                    <div className="text-sm font-medium text-slate-900 truncate">{place.name}</div>
-                    <div className="text-xs text-slate-500 truncate">{place.address}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {isSearchFocused && keyword.trim() && !isSearching && nearbyPlaces.length === 0 && (
-              <div className="absolute z-30 mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-500 shadow-lg">
-                관련 이름이 없습니다.
-              </div>
-            )}
           </div>
 
           <Button type="submit" className="h-10" disabled={!isMapReady || isSearching}>
             {isSearching ? '검색중' : '검색'}
           </Button>
         </form>
+
+        {isSearchFocused && hasNearbyResults && (
+          <div className="rounded-xl border border-white/60 bg-white/55 backdrop-blur-md shadow-md overflow-hidden">
+            <div className="max-h-72 overflow-y-auto">
+            {nearbyPlaces.slice(0, 8).map((place) => (
+              <button
+                key={place.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleNearbyPlaceSelect(place);
+                }}
+                className="w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
+              >
+                <div className="text-sm font-medium text-slate-900 truncate">{place.name}</div>
+                <div className="text-xs text-slate-500 truncate">{place.address}</div>
+              </button>
+            ))}
+            </div>
+          </div>
+        )}
+
+        {isSearchFocused && hasNoNearbyResults && (
+          <div className="rounded-xl border border-white/60 bg-white/55 backdrop-blur-md px-4 py-3 text-sm text-slate-500 shadow-md">
+            관련 이름이 없습니다.
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {brandOptions.map((brand) => (
@@ -717,6 +860,167 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           </Button>
         </div>
       )}
+
+      {/* 지도 핀 클릭 Sheet */}
+      <Sheet open={isEditDialogOpen} onOpenChange={(open: boolean) => {
+        setIsEditDialogOpen(open);
+        if (!open) {
+          setIsEditingStore(false);
+        }
+      }}>
+        <SheetContent side="right" className="w-full max-w-[90vw] sm:max-w-2xl p-0 bg-white overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {selectedStore && isEditingStore ? (
+            <>
+              <div className="mb-6 pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <span className="text-xl">✏️</span>
+                  {selectedStore.name} 정보 수정
+                </h2>
+              </div>
+              <ReportForm
+                storeId={selectedStore.id}
+                initialData={selectedStore}
+                actionType={actionType}
+                onSuccess={async () => {
+                  // 데이터 새로고침
+                  await refreshStores();
+                  // 수정 폼만 닫고 Sheet는 열려있게 유지 (업데이트된 정보를 볼 수 있음)
+                  setIsEditingStore(false);
+                }}
+              />
+            </>
+          ) : selectedStore ? (
+            <>
+              {/* 헤더 */}
+              <div className="mb-6 pb-4 border-b border-slate-200">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedStore.name}</h2>
+                    <div className="flex items-center text-gray-600 text-sm mt-2 gap-1">
+                      <MapPin className="h-4 w-4 text-blue-600" />
+                      <p className="line-clamp-2">{selectedStore.address}</p>
+                    </div>
+                  </div>
+                  <div>
+                    {(() => {
+                      const { bg, text } = getSeatingBadgeStyle(selectedStore.hasSeating);
+                      return (
+                        <Badge className={`${bg} ${text} hover:${bg} text-xs px-3 py-1`}>
+                          {getSeatingStatusText(selectedStore.hasSeating)}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pb-6">
+                {/* 좌석 상태 경고/확인 배너 */}
+                {selectedStore.hasSeating === 'unknown' ? (
+                  <Card className="border-l-4 border-l-red-500 bg-red-50">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">❓</div>
+                        <div>
+                          <h3 className="font-semibold text-red-900">좌석 정보 미확인</h3>
+                          <p className="text-sm text-red-700 mt-1">정확한 좌석 정보를 입력해주세요</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className={`border-l-4 ${
+                    selectedStore.hasSeating === 'yes'
+                      ? 'border-l-green-500 bg-green-50'
+                      : 'border-l-red-500 bg-red-50'
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">
+                          {selectedStore.hasSeating === 'yes' ? '✅' : '❌'}
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold ${
+                            selectedStore.hasSeating === 'yes'
+                              ? 'text-green-900'
+                              : 'text-red-900'
+                          }`}>
+                            {selectedStore.hasSeating === 'yes'
+                              ? '좌석이 있습니다'
+                              : '좌석이 없습니다'}
+                          </h3>
+                          <p className={`text-sm mt-1 ${
+                            selectedStore.hasSeating === 'yes'
+                              ? 'text-green-700'
+                              : 'text-red-700'
+                          }`}>
+                            {selectedStore.hasSeating === 'yes'
+                              ? '앉아서 취식할 수 있습니다'
+                              : '서서 취식만 가능합니다'}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* 최근 업데이트 */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <Clock className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
+                        <div>
+                          <p className="text-xs text-gray-500">최근 업데이트</p>
+                          <p className="font-semibold text-gray-900">{formatDate(selectedStore.lastUpdated)}</p>
+                        </div>
+                      </div>
+                      {selectedStore.reportedBy && (
+                        <div className="flex items-start gap-3 pt-2 border-t border-gray-100">
+                          <User className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
+                          <div>
+                            <p className="text-xs text-gray-500">제보자</p>
+                            <p className="font-semibold text-gray-900">{selectedStore.reportedBy}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 상세 정보 */}
+                {selectedStore.notes ? (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">상세 정보</h3>
+                      <p className="text-sm text-gray-700 leading-relaxed">{selectedStore.notes}</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="bg-gray-50">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-sm text-gray-500">좌석 형태/비고 정보가 아직 없습니다.</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* 버튼 섹션 */}
+                <div className="mt-6">
+                  <Button
+                    className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-base"
+                    onClick={() => setIsEditingStore(true)}
+                  >
+                    <Edit2 className="h-5 w-5 mr-2" />
+                    정보 수정하기
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { projectId, publicAnonKey } from "./supabase/info";
 import { Store, StoreFormData } from "../types/store";
+import offlineSeedStores from "../data/offline-stores.json";
 
 const LOCAL_STORAGE_KEY = "convi-seat-finder:stores";
 const SERVER_TIMEOUT_MS = 2500;
@@ -13,657 +14,8 @@ const REMOTE_ENABLED =
   import.meta.env.VITE_ENABLE_SUPABASE_REMOTE === "true" ||
   (import.meta.env.VITE_ENABLE_SUPABASE_REMOTE !== "false" && !IS_LOCALHOST && HAS_REMOTE_CONFIG);
 let remoteFailedOnce = false;
-const sampleStores: Store[] = [
-  {
-    id: "dtower_8",
-    name: "GS25 광화문역점",
-    address: "서울특별시 종로구 종로5길 19, 광화문센터빌딩 1층",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 스탠딩 거치대 중심 | 비고: 회전율 중심 구조",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5740,
-    longitude: 126.9803,
-  },
-  {
-    id: "dtower_9",
-    name: "GS25 종로청진점",
-    address: "서울특별시 종로구 돈화문로 34, 청진빌딩 1층",
-    hasSeating: "unknown",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 확인 필요 | 비고: 좌석 기대치 낮아 방문 후순위",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5742,
-    longitude: 126.9898,
-  },
-  {
-    id: "dtower_10",
-    name: "CU 종로타운점",
-    address: "서울특별시 종로구 종로1길 12, 종로타운 1층",
-    hasSeating: "unknown",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 확인 필요 | 비고: 테이크아웃 형태 비중 높음",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5713,
-    longitude: 126.9864,
-  },
-  // 권역별 추가 편의점 데이터
-  {
-    id: "jongno_001",
-    name: "CU 광화문광장점",
-    address: "서울특별시 종로구 세종로 161, 광화문광장 지하1층",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 긴 바(Bar) 테이블, 고정형 스툴 의자 | 비고: 착석 가능",
-    available_seats: 2,
-    total_seats: 4,
-    latitude: 37.5735,
-    longitude: 126.9768,
-  },
-  {
-    id: "jongno_002",
-    name: "세븐일레븐 소공점",
-    address: "서울특별시 종로구 소공로 103, 소공빌딩 1층",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 카페형 내부 좌석 (2~4인용 테이블 다수)",
-    available_seats: 4,
-    total_seats: 8,
-    latitude: 37.5695,
-    longitude: 126.9880,
-  },
-  {
-    id: "jongno_003",
-    name: "GS25 소공역점",
-    address: "서울특별시 중구 소공로 41, 소공역 지하1층",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 및 내부 일반 테이블 | 비고: 착석 가능",
-    available_seats: 3,
-    total_seats: 6,
-    latitude: 37.5680,
-    longitude: 126.9805,
-  },
-  {
-    id: "mapo_001",
-    name: "CU 홍대상상점",
-    address: "서울특별시 마포구 와우산로 122, 상상이뜨는집 1층",
-    latitude: 37.5565,
-    longitude: 126.9241,
-    hasSeating: "yes",
-    available_seats: 3,
-    total_seats: 5,
-  },
-  {
-    id: "mapo_002",
-    name: "이마트24 홍대입구점",
-    address: "서울특별시 마포구 홍익로 317, 홍대프라자 1층",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 북카페형 넓은 일반 좌석 | 비고: 콘센트/착석 가능",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5565,
-    longitude: 126.9241,
-  },
-  {
-    id: "mapo_003",
-    name: "GS25 연대2점",
-    address: "서울특별시 서대문구 이화여대길 45, 연세대 인근",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 바(Bar) 형태 테이블 및 의자, 야외 파라솔 (야장)",
-    available_seats: 4,
-    total_seats: 8,
-    latitude: 37.5616,
-    longitude: 126.9385,
-  },
-  {
-    id: "mapo_004",
-    name: "세븐일레븐 합정역점",
-    address: "서울특별시 마포구/서대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 바(Bar) 테이블 | 비고: 의자 3~4개",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5565,
-    longitude: 126.9241,
-  },
-  {
-    id: "mapo_005",
-    name: "이마트24 신촌본점",
-    address: "서울특별시 마포구/서대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가형 1인 바 테이블 및 의자",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5565,
-    longitude: 126.9241,
-  },
-  {
-    id: "seongdong_001",
-    name: "CU 성수낙낙점",
-    address: "서울특별시 성동구/광진구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 카페형 일반 좌석 및 창가 바 테이블",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5399,
-    longitude: 127.0690,
-  },
-  {
-    id: "seongdong_002",
-    name: "이마트24 트렌드랩 성수점",
-    address: "서울특별시 성동구/광진구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: To-Go 카페존 (내부 테이블 및 의자 다수)",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5399,
-    longitude: 127.0690,
-  },
-  {
-    id: "seongdong_003",
-    name: "GS25 건대스타점",
-    address: "서울특별시 성동구/광진구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 내부 스탠딩 바, 야외 테라스 좌석 다수 (야장)",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5399,
-    longitude: 127.0690,
-  },
-  {
-    id: "seongdong_004",
-    name: "CU 성수연무장길점",
-    address: "서울특별시 성동구/광진구",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 벽면 밀착형 좁은 스탠딩 테이블 | 비고: 의자 없음",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5399,
-    longitude: 127.0690,
-  },
-  {
-    id: "seongdong_005",
-    name: "세븐일레븐 성수다이캐스트점",
-    address: "서울특별시 성동구/광진구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 미니 바 테이블 및 스툴 의자 2~3개",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5399,
-    longitude: 127.0690,
-  },
-  {
-    id: "gangnam_001",
-    name: "GS25 강남역1호점",
-    address: "서울특별시 강남구/서초구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 바(Bar) 테이블 및 스툴 의자",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.4979,
-    longitude: 127.0276,
-  },
-  {
-    id: "gangnam_002",
-    name: "이마트24 R강남센트럴점",
-    address: "서울특별시 강남구/서초구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 쾌적한 카페형 테이블 및 다인용 일반 좌석",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.4979,
-    longitude: 127.0276,
-  },
-  {
-    id: "gangnam_003",
-    name: "CU 역삼센트럴점",
-    address: "서울특별시 강남구/서초구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 바(Bar) 테이블 및 스툴 의자 구비",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.4979,
-    longitude: 127.0276,
-  },
-  {
-    id: "gangnam_004",
-    name: "세븐일레븐 강남코엑스점",
-    address: "서울특별시 강남구/서초구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 내부 일반 좌석 및 바 테이블 혼합",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.4979,
-    longitude: 127.0276,
-  },
-  {
-    id: "gangnam_005",
-    name: "GS25 서초교대점",
-    address: "서울특별시 강남구/서초구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 매장 앞 데크 야외 파라솔 테이블 다수",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.4979,
-    longitude: 127.0276,
-  },
-  {
-    id: "yeongdeungpo_001",
-    name: "CU 여의도더현대점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 내부 카페형 일반 좌석",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  {
-    id: "yeongdeungpo_002",
-    name: "GS25 한강반포1호점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 내부 창가 바 테이블, 야외 파라솔 테이블 (다수)",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  {
-    id: "yeongdeungpo_003",
-    name: "CU 여의도한강공원점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 내부 스탠딩 바, 외부 파라솔 테이블 혼합",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  {
-    id: "yeongdeungpo_004",
-    name: "이마트24 여의도IFC점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 좁은 스탠딩 테이블 | 비고: 의자 없음, 서서 취식",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  {
-    id: "yeongdeungpo_005",
-    name: "세븐일레븐 용산아이파크몰점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 소형 스탠딩 바 테이블 | 비고: 외부 쇼핑몰 벤치 활용",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  {
-    id: "yeongdeungpo_006",
-    name: "CU 이태원프리덤점",
-    address: "서울특별시 영등포/용산/기타",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 외부 테라스형 좌석 및 스탠딩 테이블 혼합",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5174,
-    longitude: 126.9245,
-  },
-  // 추가 권역 데이터
-  {
-    id: "gwanak_001",
-    name: "CU 노량진점",
-    address: "서울특별시 관악구/동작구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 1인용 창가 바(Bar) 테이블 및 의자 다수 | 비고: 고시촌 특화",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5104,
-    longitude: 126.9700,
-  },
-  {
-    id: "gwanak_002",
-    name: "GS25 서울대입구역점",
-    address: "서울특별시 관악구/동작구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 좁은 바 테이블 | 비고: 의자 2~3개",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5104,
-    longitude: 126.9700,
-  },
-  {
-    id: "gwanak_003",
-    name: "세븐일레븐 샤로수길점",
-    address: "서울특별시 관악구/동작구",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 스탠딩 테이블 | 비고: 의자 없음, 서서 취식",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5104,
-    longitude: 126.9700,
-  },
-  {
-    id: "gwanak_004",
-    name: "이마트24 중앙대점",
-    address: "서울특별시 관악구/동작구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 실내 2인용 사각 테이블 2개 | 비고: 착석 가능",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5104,
-    longitude: 126.9700,
-  },
-  {
-    id: "gwanak_005",
-    name: "CU 보라매공원점",
-    address: "서울특별시 관악구/동작구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 매장 앞 야외 플라스틱 파라솔 다수 | 비고: 야장",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5104,
-    longitude: 126.9700,
-  },
-  {
-    id: "songpa_001",
-    name: "이마트24 석촌호수점",
-    address: "서울특별시 송파구/강동구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 외부 테라스 및 파라솔 좌석 다수",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5128,
-    longitude: 127.0851,
-  },
-  {
-    id: "songpa_002",
-    name: "CU 올림픽공원점",
-    address: "서울특별시 송파구/강동구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 외부 대형 파라솔 및 야외 벤치 활용 | 비고: 야장",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5128,
-    longitude: 127.0851,
-  },
-  {
-    id: "songpa_003",
-    name: "세븐일레븐 잠실새내점",
-    address: "서울특별시 송파구/강동구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 실내 2인용 원형 테이블 1~2개",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5128,
-    longitude: 127.0851,
-  },
-  {
-    id: "songpa_004",
-    name: "GS25 방이먹자골목점",
-    address: "서울특별시 송파구/강동구",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 좁은 창가 스탠딩 테이블 | 비고: 의자 없음",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5128,
-    longitude: 127.0851,
-  },
-  {
-    id: "songpa_005",
-    name: "CU 천호역점",
-    address: "서울특별시 송파구/강동구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 바 테이블 및 고정형 스툴 의자",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5128,
-    longitude: 127.0851,
-  },
-  {
-    id: "seongbuk_001",
-    name: "세븐일레븐 안암고대점",
-    address: "서울특별시 성북구/동대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 실내 2~4인용 일반 테이블 다수 | 비고: 대학가 특화",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5885,
-    longitude: 127.1069,
-  },
-  {
-    id: "seongbuk_002",
-    name: "GS25 경희대본점",
-    address: "서울특별시 성북구/동대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 창가 바 테이블 및 실내 사각 테이블 혼합",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5885,
-    longitude: 127.1069,
-  },
-  {
-    id: "seongbuk_003",
-    name: "CU 한국외대점",
-    address: "서울특별시 성북구/동대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 1인용 바 테이블 및 의자 다수",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5885,
-    longitude: 127.1069,
-  },
-  {
-    id: "seongbuk_004",
-    name: "이마트24 청량리역점",
-    address: "서울특별시 성북구/동대문구",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 회전율을 위한 좁은 스탠딩 거치대 | 비고: 서서 취식",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5885,
-    longitude: 127.1069,
-  },
-  {
-    id: "seongbuk_005",
-    name: "GS25 동대문DDP점",
-    address: "서울특별시 성북구/동대문구",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 실내 바 테이블 및 스툴 의자 3~4개",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5885,
-    longitude: 127.1069,
-  },
-  {
-    id: "jongno_additional_001",
-    name: "CU 명동본점",
-    address: "서울특별시 종로/중구 (추가)",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 2층 취식 전용 공간 | 비고: 일반 테이블 및 의자 다수",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5652,
-    longitude: 126.9819,
-  },
-  {
-    id: "jongno_additional_002",
-    name: "이마트24 삼청동점",
-    address: "서울특별시 종로/중구 (추가)",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 한옥 인테리어형 실내 좌석 | 비고: 착석 가능",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5652,
-    longitude: 126.9819,
-  },
-  {
-    id: "jongno_additional_003",
-    name: "CU 혜화역점 (대학로)",
-    address: "서울특별시 종로/중구 (추가)",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 좁은 스탠딩 바 | 비고: 의자 없음",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5652,
-    longitude: 126.9819,
-  },
-  {
-    id: "jongno_additional_004",
-    name: "GS25 서울역점",
-    address: "서울특별시 종로/중구 (추가)",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 벽면 밀착형 좁은 스탠딩 바 | 비고: 서서 취식 위주",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5652,
-    longitude: 126.9819,
-  },
-  {
-    id: "jongno_additional_005",
-    name: "세븐일레븐 남대문시장점",
-    address: "서울특별시 종로/중구 (추가)",
-    hasSeating: "no",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 매장 외부 좁은 스탠딩 테이블",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5652,
-    longitude: 126.9245,
-  },
-    {
-      id: "gangnam_additional_003",
-      name: "세븐일레븐 압구정로데오점",
-      address: "서울특별시 강남/서초 (추가)",
-      hasSeating: "no",
-      lastUpdated: new Date().toISOString(),
-      reportedBy: "오프라인 가이드",
-      notes: "좌석 형태: 스탠딩 테이블 위주 | 비고: 실내 공간 협소",
-      available_seats: 0,
-      total_seats: 0,
-      latitude: 37.5178,
-      longitude: 127.0256,
-    },
-  {
-    id: "gangnam_additional_004",
-    name: "GS25 방배카페골목점",
-    address: "서울특별시 강남/서초 (추가)",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 매장 앞 나무 데크 및 파라솔 좌석",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5178,
-    longitude: 127.0256,
-  },
-  {
-    id: "gangnam_additional_005",
-    name: "CU 양재시민의숲점",
-    address: "서울특별시 강남/서초 (추가)",
-    hasSeating: "yes",
-    lastUpdated: new Date().toISOString(),
-    reportedBy: "오프라인 가이드",
-    notes: "좌석 형태: 야외 테라스 파라솔 좌석 다수",
-    available_seats: 0,
-    total_seats: 0,
-    latitude: 37.5178,
-    longitude: 127.0256,
-  },
-];
+const sampleStores: Store[] = offlineSeedStores as Store[];
+const OFFLINE_REPORTERS = new Set(["오프라인 가이드", "공공데이터 API"]);
 
 function mergeWithSampleStores(stores: Store[]): Store[] {
   const byId = new Map(stores.map((store) => [store.id, store]));
@@ -680,8 +32,11 @@ function mergeWithSampleStores(stores: Store[]): Store[] {
 function normalizeStore(raw: Partial<Store> & Record<string, unknown>): Store {
   const normalizeNotes = (notes: unknown) => {
     if (typeof notes !== "string") return undefined;
+    
+    const trimmed = notes.trim();
+    if (!trimmed) return undefined;
 
-    const cleaned = notes
+    const cleaned = trimmed
       .replace(/^\s*(type|타입)\s*[abc]\s*\|\s*/i, "")
       .replace(/\s*\|\s*(type|타입)\s*[abc]\s*/gi, "")
       .trim();
@@ -689,21 +44,26 @@ function normalizeStore(raw: Partial<Store> & Record<string, unknown>): Store {
     return cleaned || undefined;
   };
 
-  const hasSeating = raw.hasSeating;
+  // snake_case와 camelCase 둘 다 지원
+  const hasSeating = raw.hasSeating || raw.has_seating;
   const seating = hasSeating === "yes" || hasSeating === "no" || hasSeating === "unknown"
     ? hasSeating
     : "unknown";
+
+  const lastUpdated = raw.lastUpdated || raw.last_updated;
+  const reportedBy = raw.reportedBy || raw.reported_by;
+  const notes = raw.notes || raw.notes;  // snake_case와 camelCase 모두 지원
 
   return {
     id: String(raw.id ?? `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`),
     name: String(raw.name ?? "이름 미상"),
     address: String(raw.address ?? "주소 미상"),
     hasSeating: seating,
-    lastUpdated: String(raw.lastUpdated ?? new Date().toISOString()),
-    reportedBy: typeof raw.reportedBy === "string" ? raw.reportedBy : undefined,
+    lastUpdated: String(lastUpdated ?? new Date().toISOString()),
+    reportedBy: typeof reportedBy === "string" ? reportedBy : undefined,
     latitude: typeof raw.latitude === "number" ? raw.latitude : undefined,
     longitude: typeof raw.longitude === "number" ? raw.longitude : undefined,
-    notes: normalizeNotes(raw.notes),
+    notes: normalizeNotes(notes),
     available_seats: typeof raw.available_seats === "number" ? raw.available_seats : 0,
     total_seats: typeof raw.total_seats === "number" ? raw.total_seats : 0,
   };
@@ -713,36 +73,89 @@ function writeLocalStores(stores: Store[]) {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stores));
 }
 
-function readLocalStores(): Store[] {
+function readLocalStores(options?: { seedWithSample?: boolean }): Store[] {
+  const seedWithSample = options?.seedWithSample ?? true;
+
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
-      writeLocalStores(sampleStores);
-      return sampleStores;
+      if (seedWithSample) {
+        writeLocalStores(sampleStores);
+        return sampleStores;
+      }
+      return [];
     }
 
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
+      if (seedWithSample) {
+        writeLocalStores(sampleStores);
+        return sampleStores;
+      }
+      return [];
+    }
+
+    const normalized = parsed.map((store) => normalizeStore(store));
+    if (!normalized.length && seedWithSample) {
       writeLocalStores(sampleStores);
       return sampleStores;
     }
 
-    const normalized = parsed.map((store) => normalizeStore(store));
-    const merged = mergeWithSampleStores(normalized);
-    if (merged.length !== normalized.length) {
-      writeLocalStores(sortStores(merged));
-    }
-    return merged;
+    return normalized;
   } catch {
-    writeLocalStores(sampleStores);
-    return sampleStores;
+    if (seedWithSample) {
+      writeLocalStores(sampleStores);
+      return sampleStores;
+    }
+    return [];
   }
 }
 
+function makeStoreKey(store: Pick<Store, "name" | "address">): string {
+  return `${store.name.trim().toLowerCase()}::${store.address.trim().toLowerCase()}`;
+}
+
+function shouldPreserveLocalStore(store: Store): boolean {
+  if (store.id.startsWith("store_") || store.id.startsWith("local_")) {
+    return true;
+  }
+
+  if (store.hasSeating !== "unknown") {
+    return true;
+  }
+
+  if (store.reportedBy && !OFFLINE_REPORTERS.has(store.reportedBy)) {
+    return true;
+  }
+
+  return false;
+}
+
 function sortStores(stores: Store[]) {
-  return [...stores].sort(
-    (a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
-  );
+  return [...stores].sort((a, b) => {
+    // 사용자 제보 편의점 먼저 (id가 "store_"로 시작)
+    const aIsUserSubmitted = a.id.startsWith('store_');
+    const bIsUserSubmitted = b.id.startsWith('store_');
+    
+    if (aIsUserSubmitted && !bIsUserSubmitted) return -1;   // a가 제보 편의점이면 앞으로
+    if (!aIsUserSubmitted && bIsUserSubmitted) return 1;    // b가 제보 편의점이면 a 뒤로
+    
+    // 같은 카테고리 내에서는 lastUpdated 기준 (최신순)
+    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+  });
+}
+
+function pruneDeletedServerStores(stores: Store[], serverStores: Store[]): Store[] {
+  const serverIds = new Set(serverStores.map((store) => store.id));
+
+  return stores.filter((store) => {
+    // server-generated id가 local cache에만 남은 경우는 삭제된 데이터로 보고 정리한다.
+    if (store.id.startsWith("store_")) {
+      return serverIds.has(store.id);
+    }
+
+    return true;
+  });
 }
 
 async function callServer(path: string, init?: RequestInit): Promise<Response | null> {
@@ -783,20 +196,58 @@ export async function getStores(): Promise<{ stores: Store[]; source: "server" |
 
   if (response?.ok) {
     const data = await response.json();
-    const stores = sortStores(
-      mergeWithSampleStores((Array.isArray(data) ? data : []).map((store) => normalizeStore(store))),
-    );
-    writeLocalStores(stores);
-    return { stores, source: "server" };
+    const serverData = (Array.isArray(data) ? data : []).map((store) => normalizeStore(store));
+    const localData = readLocalStores({ seedWithSample: false });
+    const baseStores = localData.length === 0 ? mergeWithSampleStores(serverData) : localData;
+    const byKey = new Map<string, Store>();
+
+    for (const local of baseStores) {
+      const key = makeStoreKey(local);
+      if (!byKey.has(key)) {
+        byKey.set(key, local);
+      }
+    }
+
+    for (const server of serverData) {
+      const key = makeStoreKey(server);
+      const existing = byKey.get(key);
+
+      if (!existing) {
+        byKey.set(key, server);
+        continue;
+      }
+
+      if (shouldPreserveLocalStore(existing)) {
+        continue;
+      }
+
+      byKey.set(key, server);
+    }
+
+    const merged = sortStores(Array.from(byKey.values()));
+    const pruned = sortStores(pruneDeletedServerStores(merged, serverData));
+    writeLocalStores(pruned);
+    return { stores: pruned, source: "server" };
   }
 
-  return { stores: sortStores(readLocalStores()), source: "local" };
+  return { stores: sortStores(readLocalStores({ seedWithSample: true })), source: "local" };
 }
 
 export async function createStore(payload: StoreFormData): Promise<Store> {
+  // undefined 필드 제거 (JSON.stringify에서 빠지는 것 방지)
+  const cleanedPayload = {
+    name: payload.name,
+    address: payload.address,
+    hasSeating: payload.hasSeating,
+    reporterName: payload.reporterName,
+    notes: payload.notes,  // 명시적으로 포함
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+  };
+
   const response = await callServer("/stores", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(cleanedPayload),
   });
 
   if (response?.ok) {
@@ -808,17 +259,21 @@ export async function createStore(payload: StoreFormData): Promise<Store> {
   }
 
   const local = readLocalStores();
-  const duplicate = local.find(
+  const duplicates = local.filter(
     (store) =>
       store.name.trim().toLowerCase() === payload.name.trim().toLowerCase() &&
       store.address.trim().toLowerCase() === payload.address.trim().toLowerCase(),
   );
 
+  // 같은 이름/주소가 있으면, 오프라인 가이드가 있으면 그것을 기준으로 사용 (ID 통일)
+  // 없으면 먼저 찾은 것 사용
+  const duplicate = duplicates.find(s => s.reportedBy === '오프라인 가이드') || duplicates[0];
+
   const nextStore = duplicate
     ? {
         ...duplicate,
         hasSeating: payload.hasSeating,
-        reportedBy: payload.reporterName || duplicate.reportedBy,
+        reportedBy: payload.reporterName || (duplicate.reportedBy === '오프라인 가이드' ? '익명' : duplicate.reportedBy),
         notes: payload.notes || duplicate.notes,
         latitude: payload.latitude ?? duplicate.latitude,
         longitude: payload.longitude ?? duplicate.longitude,
@@ -839,7 +294,14 @@ export async function createStore(payload: StoreFormData): Promise<Store> {
       });
 
   const merged = duplicate
-    ? local.map((store) => (store.id === duplicate.id ? normalizeStore(nextStore) : store))
+    ? local
+        // 같은 이름/주소의 모든 데이터 제거 (중복 방지)
+        .filter(store => 
+          !(store.name.trim().toLowerCase() === payload.name.trim().toLowerCase() &&
+            store.address.trim().toLowerCase() === payload.address.trim().toLowerCase())
+        )
+        // 수정된 데이터 추가
+        .concat([normalizeStore(nextStore)])
     : [normalizeStore(nextStore), ...local];
 
   writeLocalStores(sortStores(merged));
