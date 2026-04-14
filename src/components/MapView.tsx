@@ -925,6 +925,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         setIsEditDialogOpen(open);
         if (!open) {
           setIsEditingStore(false);
+          setSelectedStore(null);
+          setPendingReportSelection(null);
         }
       }}>
         <SheetContent side="right" className="w-full max-w-[90vw] sm:max-w-2xl p-0 bg-white overflow-hidden flex flex-col">
@@ -1078,7 +1080,29 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
                 </div>
               </div>
             </>
-          ) : null}
+          ) : pendingReportSelection ? (
+            <>
+              <div className="mb-6 pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <span className="text-xl">➕</span>
+                  편의점 정보 추가
+                </h2>
+                <p className="text-sm text-gray-600 mt-2 line-clamp-2">{pendingReportSelection.name} {pendingReportSelection.address}</p>
+              </div>
+              <ReportForm
+                initialData={pendingReportSelection}
+                actionType="add"
+                onSuccess={async () => {
+                  await refreshStores();
+                  setIsEditDialogOpen(false);
+                }}
+              />
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-gray-500">
+              선택한 편의점 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.
+            </div>
+          )}
           </div>
         </SheetContent>
       </Sheet>
