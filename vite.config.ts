@@ -3,9 +3,12 @@
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
 
-  export default defineConfig(({ mode }) => ({
+  export default defineConfig(({ mode }) => {
+    const isVercelBuild = process.env.VERCEL === '1';
+
+    return {
     plugins: [react()],
-    base: mode === 'production' ? '/convi-seat-finder/' : '/',
+      base: mode === 'production' ? (isVercelBuild ? '/' : '/convi-seat-finder/') : '/',
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
@@ -65,4 +68,5 @@
         clientPort: 3000,
       },
     },
-  }));
+    };
+  });

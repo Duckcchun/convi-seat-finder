@@ -23,7 +23,8 @@
 
   // Service Worker 등록 (PWA 지원)
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-    const swPath = import.meta.env.PROD ? '/convi-seat-finder/sw.js' : '/sw.js';
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const swPath = `${baseUrl}sw.js`;
     navigator.serviceWorker.register(swPath).catch((error) => {
       console.warn('Service Worker 등록 실패:', error);
     });

@@ -365,31 +365,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     target.length = 0;
   }, []);
 
-  const moveToUserLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      toast.error('위치 인식을 지원하지 않는 브라우저입니다.');
-      return;
-    }
-    if (!mapRef.current || !window.kakao?.maps) {
-      toast.error('지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latLng = new window.kakao.maps.LatLng(position.coords.latitude, position.coords.longitude);
-        mapRef.current.setCenter(latLng);
-        toast.success('현재 위치로 이동했습니다.');
-      },
-      (error) => {
-        toast.error(getGeolocationErrorMessage(error.code));
-      },
-      { enableHighAccuracy: true, timeout: 5000 },
-    );
-  }, []);
-
   const searchConvenienceStores = useCallback(
-    (inputKeyword?: string) => {
+    (inputKeyword?: string, options?: { center?: { latitude: number; longitude: number }; radius?: number }) => {
       if (!isMapReady || !searchServiceRef.current || !window.kakao?.maps?.services) return;
 
       const trimmedKeyword = inputKeyword?.trim() || '';
@@ -401,6 +378,18 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           : `${selectedBrand} 편의점`;
 
       setIsSearching(true);
+
+      const searchOptions: Record<string, unknown> = {
+        size: 15,
+        category_group_code: 'CS2',
+      };
+
+      if (options?.center) {
+        searchOptions.x = options.center.longitude;
+        searchOptions.y = options.center.latitude;
+        searchOptions.radius = options.radius ?? 1200;
+        searchOptions.sort = window.kakao.maps.services.SortBy.DISTANCE;
+      }
 
       searchServiceRef.current.keywordSearch(
         queryBase,
@@ -442,6 +431,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           });
 
           setNearbyPlaces(mergedPlaces);
+
           clearMarkers(placeMarkersRef.current);
 
           mergedPlaces.forEach((place) => {
@@ -479,14 +469,58 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             placeMarkersRef.current.push(marker);
           });
         },
-        {
-          size: 15,
-          category_group_code: 'CS2',
-        },
+        searchOptions,
       );
     },
     [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand],
   );
+
+  const moveToUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      toast.error('위치 인식을 지원하지 않는 브라우저입니다.');
+      return;
+    }
+    if (!mapRef.current || !window.kakao?.maps) {
+      toast.error('지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        const latLng = new window.kakao.maps.LatLng(latitude, longitude);
+
+        if (mapRef.current?.panTo) {
+          mapRef.current.panTo(latLng);
+        } else {
+          mapRef.current.setCenter(latLng);
+        }
+
+        mapRef.current.setLevel(3);
+        setKeyword('');
+        setPendingReportSelection(null);
+
+        if (activeInfoWindowRef.current) {
+          activeInfoWindowRef.current.close();
+          activeInfoWindowRef.current = null;
+        }
+
+        window.setTimeout(() => {
+          searchConvenienceStores('', {
+            center: { latitude, longitude },
+            radius: 1400,
+          });
+        }, 120);
+
+        toast.success('현재 위치 기준으로 주변 편의점을 불러왔습니다.');
+      },
+      (error) => {
+        toast.error(getGeolocationErrorMessage(error.code));
+      },
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 30000 },
+    );
+  }, [searchConvenienceStores]);
 
   const handleNearbyPlaceSelect = useCallback((place: NearbyPlace) => {
     if (!mapRef.current || !window.kakao?.maps) return;
@@ -551,12 +585,6 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         });
 
         mapRef.current = map;
-        setIsMapReady(true);
-        setIsMapAvailable(true);
-        setMapError(null);
-        if (loadTimeoutTimer) {
-          clearTimeout(loadTimeoutTimer);
-        }
 
         try {
           geocoderRef.current = new window.kakao.maps.services.Geocoder();
@@ -564,6 +592,13 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         } catch {
           geocoderRef.current = null;
           searchServiceRef.current = null;
+        }
+
+        setIsMapReady(true);
+        setIsMapAvailable(true);
+        setMapError(null);
+        if (loadTimeoutTimer) {
+          clearTimeout(loadTimeoutTimer);
         }
 
         if (cancelled) {
