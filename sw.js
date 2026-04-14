@@ -5,12 +5,15 @@
 
 const CACHE_NAME = 'convi-seat-finder-v3';
 const RUNTIME_CACHE = 'convi-seat-finder-runtime-v3';
+const BASE_PATH = new URL(self.registration.scope).pathname.replace(/\/$/, '');
+const APP_ROOT = BASE_PATH ? `${BASE_PATH}/` : '/';
+const APP_INDEX = `${APP_ROOT}index.html`;
 
 // 캐시할 정적 자산
 const STATIC_ASSETS = [
   '/',
-  '/convi-seat-finder/',
-  '/convi-seat-finder/index.html',
+  APP_ROOT,
+  APP_INDEX,
 ];
 
 // Service Worker 설치 이벤트
@@ -76,7 +79,7 @@ self.addEventListener('fetch', (event) => {
               return response;
             }
             // 캐시도 없으면 오프라인 응답
-            return caches.match('/convi-seat-finder/index.html');
+            return caches.match(APP_INDEX);
           });
         }),
     );
@@ -91,13 +94,13 @@ self.addEventListener('fetch', (event) => {
           if (response.status === 200) {
             const cloned = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put('/convi-seat-finder/index.html', cloned);
+              cache.put(APP_INDEX, cloned);
             });
           }
           return response;
         })
         .catch(() => {
-          return caches.match('/convi-seat-finder/index.html');
+          return caches.match(APP_INDEX);
         }),
     );
     return;
@@ -125,7 +128,7 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => {
         // 모든 시도 실패 시 인덱스 페이지 반환
-        return caches.match('/convi-seat-finder/index.html');
+        return caches.match(APP_INDEX);
       }),
   );
 });
@@ -145,7 +148,7 @@ async function syncReports() {
 
     for (const report of reports) {
       try {
-        const response = await fetch('/convi-seat-finder/api/reports', {
+        const response = await fetch(`${APP_ROOT}api/reports`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(report),
