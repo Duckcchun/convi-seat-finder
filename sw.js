@@ -3,8 +3,8 @@
  * 오프라인 캐싱 및 백그라운드 동기화
  */
 
-const CACHE_NAME = 'convi-seat-finder-v3';
-const RUNTIME_CACHE = 'convi-seat-finder-runtime-v3';
+const CACHE_NAME = 'convi-seat-finder-v4';
+const RUNTIME_CACHE = 'convi-seat-finder-runtime-v4';
 const BASE_PATH = new URL(self.registration.scope).pathname.replace(/\/$/, '');
 const APP_ROOT = BASE_PATH ? `${BASE_PATH}/` : '/';
 const APP_INDEX = `${APP_ROOT}index.html`;
