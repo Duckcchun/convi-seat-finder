@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Sheet, SheetContent } from './ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { MapPin, Clock, User, Trash2, MessageSquare, Edit2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Store } from '../types/store';
@@ -158,6 +158,8 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
         }
       }}>
         <SheetContent side="right" className="w-full max-w-2xl bg-white flex flex-col p-0">
+          <SheetTitle className="sr-only">편의점 정보 수정</SheetTitle>
+          <SheetDescription className="sr-only">편의점 정보를 확인하고 필요한 내용을 수정합니다.</SheetDescription>
           <div className="overflow-y-auto flex-1 p-6">
             {isEditingStore ? (
               <>

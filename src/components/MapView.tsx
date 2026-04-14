@@ -3,7 +3,7 @@ import { Store, StoreSelectInfo } from '../types/store';
 import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Sheet, SheetContent } from './ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
@@ -539,6 +539,30 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     refreshSearchInteraction();
   }, [refreshSearchInteraction]);
 
+  const refreshNearbyStores = useCallback(() => {
+    if (!isMapReady || !mapRef.current || !window.kakao?.maps) {
+      toast.error('지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    const center = mapRef.current.getCenter?.();
+    const latitude = center?.getLat?.();
+    const longitude = center?.getLng?.();
+
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      searchConvenienceStores(keyword);
+      return;
+    }
+
+    const level = mapRef.current.getLevel?.() ?? 4;
+    const radius = Math.min(20000, Math.max(500, Math.round(level * 350)));
+
+    searchConvenienceStores(keyword, {
+      center: { latitude, longitude },
+      radius,
+    });
+  }, [isMapReady, keyword, searchConvenienceStores]);
+
   useEffect(() => {
     let cancelled = false;
     let resizeHandler: (() => void) | undefined;
@@ -843,7 +867,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             <Navigation className="h-4 w-4 mr-1" />
             내 위치
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => searchConvenienceStores(keyword)}>
+          <Button type="button" variant="outline" size="sm" onClick={refreshNearbyStores}>
             <RefreshCw className="h-4 w-4 mr-1" />
             새로고침
           </Button>
@@ -904,6 +928,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         }
       }}>
         <SheetContent side="right" className="w-full max-w-[90vw] sm:max-w-2xl p-0 bg-white overflow-hidden flex flex-col">
+          <SheetTitle className="sr-only">편의점 정보</SheetTitle>
+          <SheetDescription className="sr-only">선택한 편의점의 상세 정보를 확인하거나 수정합니다.</SheetDescription>
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {selectedStore && isEditingStore ? (
             <>
