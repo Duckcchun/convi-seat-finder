@@ -14,7 +14,7 @@ import { getErrorMessage } from '../utils/errorHandler';
 import { validateField, type StoreFormSchema } from '../utils/validation';
 
 interface ReportFormProps {
-  onSuccess: () => void;
+  onSuccess: (savedStore?: Store) => void;
   initialData?: StoreSelectInfo | Store;
   storeId?: string;
   actionType?: 'add' | 'edit' | 'warning';
@@ -273,7 +273,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
         toast.success('✏️ 편의점 정보가 수정되었습니다');
       }
 
-      onSuccess();
+      onSuccess(savedStore);
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
@@ -300,7 +300,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
           </div>
 
           <div className="space-y-3">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 w-full min-w-0 max-w-full flex-shrink-0 flex-grow-0">
               <Label htmlFor="name" className="block text-sm font-medium">
                 편의점 이름 <span className="text-red-500">*</span>
               </Label>
@@ -444,7 +444,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
                 })}
                 disabled={isSubmitting}
                 rows={4}
-                className="resize-none border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+                className="resize-none border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500 min-w-[50rem] w-full max-w-full flex-shrink-0 flex-grow-0"
               />
               {errors.notes && <p className="mt-2 text-sm text-red-600">{errors.notes.message}</p>}
               <p className="mt-1 text-xs text-gray-500">
