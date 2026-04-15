@@ -76,6 +76,17 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       .replace(/[()\-_/.,]/g, '');
   }, []);
 
+  const calculateDistanceMeters = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return 6371000 * c;
+  }, []);
+
   const extractBrand = useCallback((value: string) => {
     const brands = ['CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
     return brands.find((brand) => String(value || '').includes(brand));
@@ -87,15 +98,23 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       const placeAddressNorm = normalizeText(place.address);
       const placeBrand = extractBrand(place.name);
 
-      let best: { store: Store; score: number } | null = null;
+      const candidates: Array<{
+        store: Store;
+        score: number;
+        distanceMeters: number;
+        exactName: boolean;
+        exactAddress: boolean;
+      }> = [];
 
       for (const store of stores) {
         let score = 0;
         const storeNameNorm = normalizeText(store.name);
         const storeAddressNorm = normalizeText(store.address);
+        const exactName = storeNameNorm === placeNameNorm;
+        const exactAddress = Boolean(storeAddressNorm && storeAddressNorm === placeAddressNorm);
 
-        if (storeNameNorm === placeNameNorm) score += 120;
-        if (storeAddressNorm && storeAddressNorm === placeAddressNorm) score += 90;
+        if (exactName) score += 120;
+        if (exactAddress) score += 90;
         if (storeNameNorm.includes(placeNameNorm) || placeNameNorm.includes(storeNameNorm)) score += 50;
         if (
           storeAddressNorm &&
@@ -110,7 +129,9 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           score += 15;
         }
 
+        let distanceMeters = Number.POSITIVE_INFINITY;
         if (typeof store.latitude === 'number' && typeof store.longitude === 'number') {
+          distanceMeters = calculateDistanceMeters(store.latitude, store.longitude, place.latitude, place.longitude);
           const dLat = Math.abs(store.latitude - place.latitude);
           const dLng = Math.abs(store.longitude - place.longitude);
 
@@ -119,14 +140,43 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           else if (dLat < 0.002 && dLng < 0.002) score += 20;
         }
 
-        if (!best || score > best.score) {
-          best = { store, score };
-        }
+        candidates.push({
+          store,
+          score,
+          distanceMeters,
+          exactName,
+          exactAddress,
+        });
       }
 
-      return best && best.score >= 40 ? best.store : undefined;
+      if (candidates.length === 0) return undefined;
+
+      candidates.sort((a, b) => b.score - a.score);
+      const top = candidates[0];
+      const second = candidates[1];
+
+      const isAmbiguous =
+        !!second &&
+        top.score - second.score < 18 &&
+        !top.exactName &&
+        !top.exactAddress;
+
+      if (isAmbiguous) {
+        return undefined;
+      }
+
+      const isNear = top.distanceMeters <= 180;
+      const isVeryNear = top.distanceMeters <= 80;
+      const isStrongScore = top.score >= 150;
+
+      if (top.exactAddress) return top.store;
+      if (top.exactName && isNear) return top.store;
+      if (isStrongScore && isVeryNear) return top.store;
+
+      return undefined;
+
     },
-    [extractBrand, normalizeText, stores],
+    [calculateDistanceMeters, extractBrand, normalizeText, stores],
   );
 
   const buildSeatSummary = useCallback((store: Store) => {
@@ -929,10 +979,10 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           setPendingReportSelection(null);
         }
       }}>
-        <SheetContent side="right" className="w-[86vw] max-w-md sm:w-120 sm:max-w-120 p-0 bg-white overflow-hidden flex flex-col">
+        <SheetContent side="right" className="w-screen max-w-md sm:w-120 sm:max-w-120 p-0 bg-white overflow-x-hidden flex flex-col min-w-0 flex-shrink-0 flex-grow-0">
           <SheetTitle className="sr-only">편의점 정보</SheetTitle>
           <SheetDescription className="sr-only">선택한 편의점의 상세 정보를 확인하거나 수정합니다.</SheetDescription>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0 flex-shrink-0 flex-grow-0">
           {selectedStore && isEditingStore ? (
             <>
               <div className="mb-6 pb-4 border-b border-slate-200">
@@ -945,7 +995,17 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
                 storeId={selectedStore.id}
                 initialData={selectedStore}
                 actionType={actionType}
-                onSuccess={async () => {
+                onSuccess={async (updatedStore) => {
+                  if (updatedStore) {
+                    setSelectedStore(updatedStore);
+
+                    if (activeInfoWindowRef.current) {
+                      const newContent = buildInfoWindowContent(updatedStore.name, updatedStore.address, updatedStore);
+                      activeInfoWindowRef.current.setContent(newContent);
+                      attachInfoWindowButtonListener(updatedStore);
+                    }
+                  }
+
                   // 데이터 새로고침
                   await refreshStores();
                   // 수정 폼만 닫고 Sheet는 열려있게 유지 (업데이트된 정보를 볼 수 있음)

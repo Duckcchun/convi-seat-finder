@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { MapPin, PlusCircle, X } from 'lucide-react';
+import { PlusCircle, X } from 'lucide-react';
+import { Logo } from './components/ui/Logo';
 import { toast } from 'sonner';
 import { Button } from './components/ui/button';
 import { ConvenienceStoreList } from './components/ConvenienceStoreList';
@@ -31,13 +32,13 @@ export function AppContent() {
         <div className="max-w-4xl mx-auto w-full px-4 py-4 md:py-5">
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex h-12 items-center gap-1.5">
-                <MapPin className="h-6 w-6 text-blue-600" />
+              <div className="flex h-12 items-center gap-1 pl-0">
+                <Logo size={112} className="mr-0" />
                 <h1 className="text-xl font-semibold text-slate-900">편의점 좌석 찾기</h1>
               </div>
-              <p className="text-sm text-slate-600">
-                주변 편의점 좌석 현황을 먼저 확인하고, 필요할 때만 제보하세요.
-              </p>
+               <p className="text-sm text-slate-600 pl-20">
+                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;주변 편의점 좌석 현황을 먼저 확인하고, 제보하세요.
+               </p>
             </div>
 
             <div className="shrink-0">

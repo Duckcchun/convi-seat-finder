@@ -1,3 +1,10 @@
+// REMOTE_ENABLED 상태 및 환경변수, 호스트명 로그 (앱 실행 시 자동 출력)
+try {
+  // @ts-ignore
+  console.log('[REMOTE_ENABLED]', REMOTE_ENABLED, 'VITE_ENABLE_SUPABASE_REMOTE:', import.meta.env.VITE_ENABLE_SUPABASE_REMOTE, 'IS_LOCALHOST:', IS_LOCALHOST, 'HAS_REMOTE_CONFIG:', HAS_REMOTE_CONFIG, 'hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A');
+} catch (e) {
+  // import.meta.env 접근 불가 환경(런타임 콘솔 등)에서는 무시
+}
 import { projectId, publicAnonKey } from "./supabase/info";
 import { Store, StoreFormData } from "../types/store";
 import offlineSeedStores from "../data/offline-stores.json";
@@ -322,20 +329,39 @@ export async function updateStore(storeId: string, patch: Partial<Store>): Promi
     return updated;
   }
 
-  const local = readLocalStores();
-  const existing = local.find((store) => store.id === storeId);
-  if (!existing) return null;
-
-  const updated = normalizeStore({
-    ...existing,
-    ...patch,
-    id: storeId,
-    lastUpdated: new Date().toISOString(),
-  });
-
-  const merged = local.map((store) => (store.id === storeId ? updated : store));
-  writeLocalStores(sortStores(merged));
-  return updated;
+  // 서버에 없는 id로 update 실패 시, 자동으로 createStore를 호출해 서버에 새로 저장
+  try {
+    const mergedPayload = { ...patch };
+    // name, address 등 필수값이 patch에 없으면 로컬에서 보충
+    const local = readLocalStores();
+    const existing = local.find((store) => store.id === storeId);
+    if (existing) {
+      if (!mergedPayload.name) mergedPayload.name = existing.name;
+      if (!mergedPayload.address) mergedPayload.address = existing.address;
+      if (!mergedPayload.hasSeating) mergedPayload.hasSeating = existing.hasSeating;
+      if (!mergedPayload.latitude) mergedPayload.latitude = existing.latitude;
+      if (!mergedPayload.longitude) mergedPayload.longitude = existing.longitude;
+      if (!mergedPayload.notes) mergedPayload.notes = existing.notes;
+      if (!mergedPayload.reportedBy) mergedPayload.reportedBy = existing.reportedBy;
+    }
+    // @ts-ignore
+    const created = await createStore(mergedPayload);
+    return created;
+  } catch (e) {
+    // 실패 시 fallback: 로컬만 갱신
+    const local = readLocalStores();
+    const existing = local.find((store) => store.id === storeId);
+    if (!existing) return null;
+    const updated = normalizeStore({
+      ...existing,
+      ...patch,
+      id: storeId,
+      lastUpdated: new Date().toISOString(),
+    });
+    const merged = local.map((store) => (store.id === storeId ? updated : store));
+    writeLocalStores(sortStores(merged));
+    return updated;
+  }
 }
 
 export async function deleteStore(storeId: string): Promise<boolean> {
