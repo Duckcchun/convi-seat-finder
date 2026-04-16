@@ -241,6 +241,8 @@ export async function getStores(): Promise<{ stores: Store[]; source: "server" |
 }
 
 export async function createStore(payload: StoreFormData): Promise<Store> {
+  // 모바일 디버깅용 REMOTE_ENABLED 상태 알림
+  alert(`현재 REMOTE_ENABLED 상태: ${REMOTE_ENABLED}`);
   // undefined 필드 제거 (JSON.stringify에서 빠지는 것 방지)
   const cleanedPayload = {
     name: payload.name,
