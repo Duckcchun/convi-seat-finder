@@ -33,7 +33,7 @@ export function AppContent() {
           <div className="flex w-full items-center justify-between gap-4">
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex h-12 items-center gap-1 pl-0">
-                <Logo size={112} className="mr-0" />
+                <Logo size={40} className="mr-0" />
                 <h1 className="text-xl font-semibold text-slate-900">편의점 좌석 찾기</h1>
               </div>
                <p className="text-sm text-slate-600 pl-20">

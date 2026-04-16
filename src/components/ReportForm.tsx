@@ -282,209 +282,204 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
 
   const isAlreadyReported = Boolean(
     formValues.name &&
-      formValues.address &&
-      stores.some(
-        (store) =>
-          store.name.trim().toLowerCase() === formValues.name.trim().toLowerCase() &&
-          store.address.trim().toLowerCase() === formValues.address.trim().toLowerCase(),
-      ),
+    formValues.address &&
+    stores.some(
+      (store) =>
+        store.name.trim().toLowerCase() === formValues.name.trim().toLowerCase() &&
+        store.address.trim().toLowerCase() === formValues.address.trim().toLowerCase()
+    )
   );
-
   return (
-    <div className="space-y-5">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
-        <div className="mb-6 mt-4 space-y-3 border-b border-slate-100 pb-5">
-          <div className="mb-3 flex items-center gap-1.5">
-            <MapPin className="h-5 w-5 shrink-0 text-blue-600" />
-            <h3 className="text-base font-semibold text-gray-900">편의점 기본 정보</h3>
-          </div>
-
-          <div className="space-y-3">
-            <div className="space-y-1.5 w-full min-w-0 max-w-full flex-shrink-0 flex-grow-0">
-              <Label htmlFor="name" className="block text-sm font-medium">
-                편의점 이름 <span className="text-red-500">*</span>
-              </Label>
-              <StoreSearchInput
-                value={formValues.name}
-                onValueChange={(value) => setValue('name', value)}
-                onStoreSelect={handleStoreSearchSelect}
-                placeholder="편의점 이름을 입력하거나 검색하세요"
-                disabled={isSubmitting}
-              />
-              {errors.name && <p className="mt-2 text-sm text-red-600">{errors.name.message}</p>}
-              <p className="mt-3 mb-4 flex items-center gap-2 text-xs text-blue-700">
-                <Info className="h-4 w-4 shrink-0" />
-                편의점 이름을 입력하면 실제 편의점을 자동으로 검색할 수 있습니다
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="address" className="block text-sm font-medium">
-                주소 <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="address"
-                type="text"
-                placeholder="예: 서울시 강남구 테헤란로 123"
-                {...register('address', {
-                  validate: (value) => validateField('address', value) || true,
-                })}
-                disabled={isSubmitting}
-                className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
-              />
-              {errors.address && <p className="mt-2 text-sm text-red-600">{errors.address.message}</p>}
-              {formValues.latitude && formValues.longitude && (
-                <p className="mt-1.5 flex items-center text-xs text-green-700 gap-1">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  위치 정보가 자동으로 설정되었습니다
-                </p>
-              )}
-            </div>
-          </div>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col space-y-5">
+      {/* 편의점 기본 정보 */}
+      <div>
+        <div className="mb-3 flex items-center gap-1.5">
+          <MapPin className="h-5 w-5 shrink-0 text-blue-600" />
+          <h3 className="text-base font-semibold text-gray-900">편의점 기본 정보</h3>
         </div>
-
-        <div className="mb-6 mt-6 space-y-3 border-b border-slate-100 pb-5">
-          <div className="mb-3 flex items-center gap-1.5">
-            <AlertCircle className="h-5 w-5 shrink-0 text-orange-600" />
-            <h3 className="text-base font-semibold text-gray-900">좌석 정보</h3>
-          </div>
-
-          <div>
-            <Label className="mb-2 block text-sm font-medium">
-              좌석 여부 <span className="text-red-500">*</span>
+        <div className="space-y-3">
+          <div className="space-y-1.5 w-full min-w-0 max-w-full shrink-0 grow-0">
+            <Label htmlFor="name" className="block text-sm font-medium">
+              편의점 이름 <span className="text-red-500">*</span>
             </Label>
-            <div className="space-y-3" role="radiogroup" aria-label="좌석 여부">
-              {SEAT_OPTIONS.map((option) => {
-                const isSelected = formValues.hasSeating === option.id;
-                const currentStyle = isSelected ? option.colors.selected : option.colors.default;
-
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => setValue('hasSeating', option.id)}
-                    aria-pressed={isSelected}
-                    className={`flex min-h-16 w-full items-center rounded-lg border-2 gap-2.5 px-3 py-2 text-left transition-colors duration-200 ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                    style={{
-                      backgroundColor: currentStyle.containerBg,
-                      borderColor: currentStyle.containerBorder,
-                    }}
-                  >
-                    <div className="mr-2 shrink-0 pt-0.5">
-                      <div
-                        className="flex items-center justify-center rounded-full transition-colors duration-200"
-                        style={{
-                          width: '16px',
-                          height: '16px',
-                          borderWidth: '2px',
-                          borderStyle: 'solid',
-                          borderColor: isSelected ? currentStyle.radioBorder : option.accent,
-                          backgroundColor: isSelected ? currentStyle.radioBorder : '#ffffff',
-                        }}
-                      >
-                        {isSelected && <div className="rounded-full" style={{ width: '6px', height: '6px', backgroundColor: '#ffffff' }} />}
-                      </div>
-                    </div>
-                    <div className="flex flex-col justify-center">
-                      <span
-                        className="text-sm font-semibold leading-tight transition-colors duration-200"
-                        style={{ color: currentStyle.title }}
-                      >
-                        {option.title}
-                      </span>
-                      <span
-                        className="text-xs font-normal leading-tight transition-colors duration-200"
-                        style={{ color: currentStyle.desc }}
-                      >
-                        {option.desc}
-                      </span>
-                    </div>
-                  </button>
-                );
+            <StoreSearchInput
+              value={formValues.name}
+              onValueChange={(value) => setValue('name', value)}
+              onStoreSelect={handleStoreSearchSelect}
+              placeholder="편의점 이름을 입력하거나 검색하세요"
+              disabled={isSubmitting}
+            />
+            {errors.name && <p className="mt-2 text-sm text-red-600">{errors.name.message}</p>}
+            <p className="mt-3 mb-4 flex items-center gap-2 text-xs text-blue-700">
+              <Info className="h-4 w-4 shrink-0" />
+              편의점 이름을 입력하면 실제 편의점을 자동으로 검색할 수 있습니다
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="address" className="block text-sm font-medium">
+              주소 <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="address"
+              type="text"
+              placeholder="예: 서울시 강남구 테헤란로 123"
+              {...register('address', {
+                validate: (value) => validateField('address', value) || true,
               })}
-            </div>
-            {errors.hasSeating && <p className="mt-2 text-sm text-red-600">{errors.hasSeating.message}</p>}
+              disabled={isSubmitting}
+              className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+            />
+            {errors.address && <p className="mt-2 text-sm text-red-600">{errors.address.message}</p>}
+            {formValues.latitude && formValues.longitude && (
+              <p className="mt-1.5 flex items-center text-xs text-green-700 gap-1">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                위치 정보가 자동으로 설정되었습니다
+              </p>
+            )}
           </div>
         </div>
+      </div>
 
-        <div className="mb-6 mt-6 space-y-3">
-          <div className="mb-3 flex items-center gap-1.5">
-            <User className="h-5 w-5 shrink-0 text-gray-600" />
-            <h3 className="text-base font-semibold text-gray-900">추가 정보 (선택사항)</h3>
+      {/* 좌석 정보 */}
+      <div className="mb-6 mt-6 space-y-3 border-b border-slate-100 pb-5">
+        <div className="mb-3 flex items-center gap-1.5">
+          <AlertCircle className="h-5 w-5 shrink-0 text-orange-600" />
+          <h3 className="text-base font-semibold text-gray-900">좌석 정보</h3>
+        </div>
+        <div>
+          <Label className="mb-2 block text-sm font-medium">
+            좌석 여부 <span className="text-red-500">*</span>
+          </Label>
+          <div className="space-y-3" role="radiogroup" aria-label="좌석 여부">
+            {SEAT_OPTIONS.map((option) => {
+              const isSelected = formValues.hasSeating === option.id;
+              const currentStyle = isSelected ? option.colors.selected : option.colors.default;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setValue('hasSeating', option.id)}
+                  aria-pressed={isSelected}
+                  className={`flex min-h-16 w-full items-center rounded-lg border-2 gap-2.5 px-3 py-2 text-left transition-colors duration-200 ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  style={{
+                    backgroundColor: currentStyle.containerBg,
+                    borderColor: currentStyle.containerBorder,
+                  }}
+                >
+                  <div className="mr-2 shrink-0 pt-0.5">
+                    <div
+                      className="flex items-center justify-center rounded-full transition-colors duration-200"
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        borderWidth: '2px',
+                        borderStyle: 'solid',
+                        borderColor: isSelected ? currentStyle.radioBorder : option.accent,
+                        backgroundColor: isSelected ? currentStyle.radioBorder : '#ffffff',
+                      }}
+                    >
+                      {isSelected && <div className="rounded-full" style={{ width: '6px', height: '6px', backgroundColor: '#ffffff' }} />}
+                    </div>
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <span
+                      className="text-sm font-semibold leading-tight transition-colors duration-200"
+                      style={{ color: currentStyle.title }}
+                    >
+                      {option.title}
+                    </span>
+                    <span
+                      className="text-xs font-normal leading-tight transition-colors duration-200"
+                      style={{ color: currentStyle.desc }}
+                    >
+                      {option.desc}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+          {errors.hasSeating && <p className="mt-2 text-sm text-red-600">{errors.hasSeating.message}</p>}
+        </div>
+      </div>
 
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="reporterName" className="block text-sm font-medium">
-                제보자 이름
-              </Label>
-              <Input
-                id="reporterName"
-                type="text"
-                placeholder="익명 (입력하지 않으면 익명으로 표시됩니다)"
-                {...register('reporterName', {
-                  validate: (value) => !value || validateField('reporterName', value) || true,
-                })}
-                disabled={isSubmitting}
-                className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
-              />
-              {errors.reporterName && <p className="mt-2 text-sm text-red-600">{errors.reporterName.message}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="notes" className="block text-sm font-medium">
-                상세 정보
-              </Label>
-              <Textarea
-                id="notes"
-                placeholder="좌석 개수, 테이블 형태, 이용 시간대, 기타 특이사항 등 상세한 정보를 입력해주세요..."
-                {...register('notes', {
-                  validate: (value) => !value || validateField('notes', value) || true,
-                })}
-                disabled={isSubmitting}
-                rows={4}
-                className="resize-none border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500 min-w-[50rem] w-full max-w-full flex-shrink-0 flex-grow-0"
-              />
-              {errors.notes && <p className="mt-2 text-sm text-red-600">{errors.notes.message}</p>}
-              <p className="mt-1 text-xs text-gray-500">
-                예: "4인 테이블 2개, 2인 테이블 3개 있음. 주말에는 혼잡함"
-              </p>
-            </div>
+      {/* 추가 정보 */}
+      <div className="mb-6 mt-6 space-y-3">
+        <div className="mb-3 flex items-center gap-1.5">
+          <User className="h-5 w-5 shrink-0 text-gray-600" />
+          <h3 className="text-base font-semibold text-gray-900">추가 정보 (선택사항)</h3>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="reporterName" className="block text-sm font-medium">
+              제보자 이름
+            </Label>
+            <Input
+              id="reporterName"
+              type="text"
+              placeholder="익명 (입력하지 않으면 익명으로 표시됩니다)"
+              {...register('reporterName', {
+                validate: (value) => !value || validateField('reporterName', value) || true,
+              })}
+              disabled={isSubmitting}
+              className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+            />
+            {errors.reporterName && <p className="mt-2 text-sm text-red-600">{errors.reporterName.message}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="notes" className="block text-sm font-medium">
+              상세 정보
+            </Label>
+            <Textarea
+              id="notes"
+              placeholder="좌석 개수, 테이블 형태, 이용 시간대, 기타 특이사항 등 상세한 정보를 입력해주세요..."
+              {...register('notes', {
+                validate: (value) => !value || validateField('notes', value) || true,
+              })}
+              disabled={isSubmitting}
+              rows={4}
+              className="resize-none border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500 min-w-200 w-full max-w-full shrink-0 grow-0"
+            />
+            {errors.notes && <p className="mt-2 text-sm text-red-600">{errors.notes.message}</p>}
+            <p className="mt-1 text-xs text-gray-500">
+              예: "4인 테이블 2개, 2인 테이블 3개 있음. 주말에는 혼잡함"
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="mt-6 pt-8 border-t border-slate-100">
-          {isAlreadyReported && !storeId && (
-            <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
-              <div className="flex items-center justify-center font-medium text-amber-800">
-                <AlertCircle className="mr-2 h-5 w-5" />
-                이미 제보된 위치입니다
-              </div>
-              <p className="mt-2 text-sm text-amber-700">
-                제출하면 기존 제보에 상세 정보가 반영됩니다
-              </p>
+      {/* 제출 버튼 및 경고 */}
+      <div className="mt-6 pt-8 border-t border-slate-100">
+        {isAlreadyReported && !storeId && (
+          <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+            <div className="flex items-center justify-center font-medium text-amber-800">
+              <AlertCircle className="mr-2 h-5 w-5" />
+              이미 제보된 위치입니다
+            </div>
+            <p className="mt-2 text-sm text-amber-700">
+              제출하면 기존 제보에 상세 정보가 반영됩니다
+            </p>
+          </div>
+        )}
+        <Button 
+          type="submit" 
+          className="h-12 w-full bg-blue-600 text-base font-medium hover:bg-blue-700 mt-4" 
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <div className="flex items-center">
+              <div className="mr-3 h-5 w-5 animate-spin rounded-full border-b-2 border-white" />
+              {storeId ? '수정 중...' : '제보 중...'}
+            </div>
+          ) : (
+            <div className="flex items-center">
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              {storeId ? '정보 수정하기' : '정보 제보하기'}
             </div>
           )}
-          <Button 
-            type="submit" 
-            className="h-12 w-full bg-blue-600 text-base font-medium hover:bg-blue-700 mt-4" 
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <div className="flex items-center">
-                <div className="mr-3 h-5 w-5 animate-spin rounded-full border-b-2 border-white" />
-                {storeId ? '수정 중...' : '제보 중...'}
-              </div>
-            ) : (
-              <div className="flex items-center">
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                {storeId ? '정보 수정하기' : '정보 제보하기'}
-              </div>
-            )}
-          </Button>
-        </div>
-      </form>
-    </div>
+        </Button>
+      </div>
+    </form>
   );
 }

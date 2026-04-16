@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../utils/supabaseClient';
 import { Store } from '../types/store';
 import { getStores } from '../utils/store-api';
 import { toast } from 'sonner';
@@ -21,7 +22,6 @@ export const useStoreData = (): UseStoreDataReturn => {
   const [error, setError] = useState<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
 
-  const refreshIntervalMs = 20000;
 
   const loadStores = useCallback(async (options?: { silent?: boolean }) => {
     const shouldShowLoading = !options?.silent;
@@ -55,20 +55,29 @@ export const useStoreData = (): UseStoreDataReturn => {
     }
   }, []);
 
-  // 초기 렌더링 시 한 번만 로드
+
+  // 1. 최초 1회 데이터 로드
   useEffect(() => {
     loadStores();
-  }, [loadStores]);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      loadStores({ silent: true });
-    }, refreshIntervalMs);
+    // 2. Supabase Realtime 구독
+    const channel = supabase
+      .channel('realtime-stores')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stores' },
+        (payload) => {
+          console.log('실시간 데이터 변경 감지!', payload);
+          loadStores({ silent: true });
+        }
+      )
+      .subscribe();
 
+    // 3. 언마운트 시 구독 해제
     return () => {
-      window.clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
-  }, [loadStores, refreshIntervalMs]);
+  }, [loadStores]);
 
   return {
     stores,

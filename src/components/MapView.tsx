@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Store, StoreSelectInfo } from '../types/store';
 import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
+// import { InfoWindow } from './InfoWindow';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
@@ -43,6 +44,7 @@ interface MapViewProps {
 
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const { refreshStores } = useStore();
+  // const [infoWindowPosition, setInfoWindowPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isMapAvailable, setIsMapAvailable] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -108,28 +110,10 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
       for (const store of stores) {
         let score = 0;
+        let distanceMeters = Number.POSITIVE_INFINITY;
         const storeNameNorm = normalizeText(store.name);
         const storeAddressNorm = normalizeText(store.address);
-        const exactName = storeNameNorm === placeNameNorm;
-        const exactAddress = Boolean(storeAddressNorm && storeAddressNorm === placeAddressNorm);
 
-        if (exactName) score += 120;
-        if (exactAddress) score += 90;
-        if (storeNameNorm.includes(placeNameNorm) || placeNameNorm.includes(storeNameNorm)) score += 50;
-        if (
-          storeAddressNorm &&
-          placeAddressNorm &&
-          (storeAddressNorm.includes(placeAddressNorm) || placeAddressNorm.includes(storeAddressNorm))
-        ) {
-          score += 30;
-        }
-
-        const storeBrand = extractBrand(store.name);
-        if (placeBrand && storeBrand && placeBrand === storeBrand) {
-          score += 15;
-        }
-
-        let distanceMeters = Number.POSITIVE_INFINITY;
         if (typeof store.latitude === 'number' && typeof store.longitude === 'number') {
           distanceMeters = calculateDistanceMeters(store.latitude, store.longitude, place.latitude, place.longitude);
           const dLat = Math.abs(store.latitude - place.latitude);
@@ -140,13 +124,14 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           else if (dLat < 0.002 && dLng < 0.002) score += 20;
         }
 
-        candidates.push({
-          store,
-          score,
-          distanceMeters,
-          exactName,
-          exactAddress,
-        });
+        const exactName = storeNameNorm === placeNameNorm;
+        const exactAddress = storeAddressNorm === placeAddressNorm;
+
+        if (exactName) score += 60;
+        if (exactAddress) score += 60;
+        if (storeBrandMatch(store, placeBrand)) score += 20;
+
+        candidates.push({ store, score, distanceMeters, exactName, exactAddress });
       }
 
       if (candidates.length === 0) return undefined;
@@ -174,10 +159,14 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
       if (isStrongScore && isVeryNear) return top.store;
 
       return undefined;
-
     },
     [calculateDistanceMeters, extractBrand, normalizeText, stores],
   );
+
+  function storeBrandMatch(store: Store, placeBrand: string | undefined) {
+    if (!placeBrand) return false;
+    return String(store.name || '').includes(placeBrand);
+  }
 
   const buildSeatSummary = useCallback((store: Store) => {
     if (store.hasSeating === 'yes') return '좌석: 있음';
@@ -979,10 +968,10 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           setPendingReportSelection(null);
         }
       }}>
-        <SheetContent side="right" className="w-screen max-w-md sm:w-120 sm:max-w-120 p-0 bg-white overflow-x-hidden flex flex-col min-w-0 flex-shrink-0 flex-grow-0">
+        <SheetContent side="right" className="w-screen max-w-md sm:w-120 sm:max-w-120 p-0 bg-white overflow-x-hidden flex flex-col min-w-0 shrink-0 grow-0">
           <SheetTitle className="sr-only">편의점 정보</SheetTitle>
           <SheetDescription className="sr-only">선택한 편의점의 상세 정보를 확인하거나 수정합니다.</SheetDescription>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0 flex-shrink-0 flex-grow-0">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0 shrink-0 grow-0">
           {selectedStore && isEditingStore ? (
             <>
               <div className="mb-6 pb-4 border-b border-slate-200">

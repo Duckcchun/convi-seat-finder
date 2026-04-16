@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Logo({ size = 48, className = "" }: { size?: number; className?: string }) {
+export function Logo({ size = 32, className = "" }: { size?: number; className?: string }) {
   return (
     <img
       src="/logo.png"
