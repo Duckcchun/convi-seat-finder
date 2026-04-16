@@ -34,7 +34,14 @@ export function AppContent() {
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex h-12 items-center gap-1 pl-0">
                 <Logo size={40} className="mr-0" />
-                <h1 className="text-xl font-semibold text-slate-900">편의점 좌석 찾기</h1>
+                <h1 className="text-xl font-semibold text-slate-900">
+                  <span>편</span>
+                  <span style={{ fontSize: '0.7em', color: '#6b7280', marginLeft: 2 }}>(하게)</span>
+                  &nbsp;
+                  <span>의</span>
+                  <span style={{ fontSize: '0.7em', color: '#6b7280', marginLeft: 2 }}>(자에 앉을 수 있는)</span>
+                  &nbsp;점
+                </h1>
               </div>
                <p className="text-sm text-slate-600 pl-20">
                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;주변 편의점 좌석 현황을 먼저 확인하고, 제보하세요.
