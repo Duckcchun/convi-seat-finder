@@ -6,12 +6,7 @@ import { AppContent } from './AppContent';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
-  useEffect(() => {
-    try {
-      // @ts-ignore
-      console.log('[REMOTE_ENABLED]', import.meta.env.VITE_ENABLE_SUPABASE_REMOTE, window.location.hostname);
-    } catch (e) {}
-  }, []);
+  // 디버깅용 로그 제거 (배포용)
   return (
     <>
       <ErrorBoundary>

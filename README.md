@@ -170,7 +170,7 @@ VITE_ENABLE_SUPABASE_REMOTE="false"
 
 <br>
 
-## � 개발 가이드
+## 🛠️ 개발 가이드
 
 ### 프로젝트 설정
 - **Node.js:** v18 이상 권장
