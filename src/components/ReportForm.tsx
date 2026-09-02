@@ -325,8 +325,8 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       {/* 편의점 기본 정보 */}
       <div>
         <div className="mb-3 flex items-center gap-1.5">
-          <MapPin className="h-5 w-5 shrink-0 text-blue-600" />
-          <h3 className="text-base font-semibold text-gray-900">편의점 기본 정보</h3>
+          <MapPin className="h-5 w-5 shrink-0 text-primary" />
+          <h3 className="text-base font-semibold text-foreground">편의점 기본 정보</h3>
         </div>
         <div className="space-y-3">
           <div className="space-y-1.5 w-full min-w-0 max-w-full shrink-0 grow-0">
@@ -358,7 +358,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
                 validate: (value) => validateField('address', value) || true,
               })}
               disabled={isSubmitting}
-              className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+              className="h-11 rounded-xl border-border bg-input-background px-4 py-3 text-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
             />
             {errors.address && <p className="mt-2 text-sm text-red-600">{errors.address.message}</p>}
             {formValues.latitude && formValues.longitude && (
@@ -372,10 +372,10 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       </div>
 
       {/* 좌석 정보 */}
-      <div className="mb-6 mt-6 space-y-3 border-b border-slate-100 pb-5">
+      <div className="mb-6 mt-6 space-y-3 border-b border-border pb-5">
         <div className="mb-3 flex items-center gap-1.5">
-          <AlertCircle className="h-5 w-5 shrink-0 text-orange-600" />
-          <h3 className="text-base font-semibold text-gray-900">좌석 정보</h3>
+          <AlertCircle className="h-5 w-5 shrink-0 text-orange-500" />
+          <h3 className="text-base font-semibold text-foreground">좌석 정보</h3>
         </div>
         <div>
           <Label className="mb-2 block text-sm font-medium">
@@ -457,7 +457,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
                     className={`flex min-h-14 items-center gap-2.5 rounded-lg border-2 px-3 py-2 text-left transition-colors duration-200 ${
                       selected
                         ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
+                        : 'border-border bg-card hover:border-muted-foreground/40'
                     } ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                   >
                     <span className="text-xl leading-none">{meta.emoji}</span>
@@ -481,8 +481,8 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       {/* 추가 정보 */}
       <div className="mb-6 mt-6 space-y-3">
         <div className="mb-3 flex items-center gap-1.5">
-          <User className="h-5 w-5 shrink-0 text-gray-600" />
-          <h3 className="text-base font-semibold text-gray-900">추가 정보 (선택사항)</h3>
+          <User className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <h3 className="text-base font-semibold text-foreground">추가 정보 (선택사항)</h3>
         </div>
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -497,7 +497,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
                 validate: (value) => !value || validateField('reporterName', value) || true,
               })}
               disabled={isSubmitting}
-              className="h-11 border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500"
+              className="h-11 rounded-xl border-border bg-input-background px-4 py-3 text-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
             />
             {errors.reporterName && <p className="mt-2 text-sm text-red-600">{errors.reporterName.message}</p>}
           </div>
@@ -513,7 +513,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
               })}
               disabled={isSubmitting}
               rows={4}
-              className="resize-none border-slate-300 bg-white px-4 py-3 text-sm focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500 min-w-200 w-full max-w-full shrink-0 grow-0"
+              className="w-full max-w-full min-w-0 shrink-0 grow-0 resize-none rounded-xl border-border bg-input-background px-4 py-3 text-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
             />
             {errors.notes && <p className="mt-2 text-sm text-red-600">{errors.notes.message}</p>}
             <p className="mt-1 text-xs text-gray-500">
@@ -524,7 +524,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       </div>
 
       {/* 제출 버튼 및 경고 */}
-      <div className="mt-6 pt-8 border-t border-slate-100">
+      <div className="mt-6 border-t border-border pt-8">
         {isAlreadyReported && !storeId && (
           <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
             <div className="flex items-center justify-center font-medium text-amber-800">
@@ -538,7 +538,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
         )}
         <Button 
           type="submit" 
-          className="h-12 w-full bg-blue-600 text-base font-medium hover:bg-blue-700 mt-4" 
+          className="mt-4 h-12 w-full rounded-xl text-base font-medium" 
           disabled={isSubmitting}
         >
           {isSubmitting ? (

@@ -7,7 +7,7 @@ import { MapPin, Clock, User, Trash2, MessageSquare, Edit2, AlertCircle } from '
 import { toast } from 'sonner';
 import { Store } from '../types/store';
 import { deleteStore } from '../utils/store-api';
-import { formatDate, formatNotes, getSeatingBadgeStyle, getSeatingStatusText, SEAT_TYPE_META } from '../utils/formatters';
+import { formatDate, formatNotes, getSeatingBadgeClass, getSeatingStatusText, SEAT_TYPE_META } from '../utils/formatters';
 import { ReportForm } from './ReportForm';
 import { useStore } from '../context/StoreContext';
 
@@ -76,111 +76,108 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
 
   return (
     <>
-      <Card className={`transition-shadow hover:shadow-md ${store.hasSeating === 'unknown' ? 'border-dashed bg-slate-50/50' : ''}`}>
+      <Card
+        className={`gap-0 rounded-2xl border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md ${
+          store.hasSeating === 'unknown' ? 'border-dashed bg-muted/30' : 'bg-card'
+        }`}
+      >
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1">
-              {/* 이름 + 주소 + 버튼/배지 */}
-              <div className="flex items-start justify-between mb-3 gap-3">
-                <div>
-                  <h3 className="font-medium text-lg">{store.name}</h3>
-                  <div className="flex items-center text-gray-600 text-sm mt-1">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    <span>{store.address}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {canEdit && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditDialogOpen(true)}
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {canDelete() && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {(() => {
-                    const { bg, text } = getSeatingBadgeStyle(store.hasSeating);
-                    return (
-                      <Badge className={`${bg} ${text} hover:${bg}`}>
-                        {getSeatingStatusText(store.hasSeating)}
-                      </Badge>
-                    );
-                  })()}
-                </div>
+          {/* 이름 + 주소 + 상태 배지 */}
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-foreground">{store.name}</h3>
+              <div className="mt-1 flex items-start gap-1 text-sm text-muted-foreground">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span className="line-clamp-1">{store.address}</span>
               </div>
-
-              {/* 좌석 형태 뱃지 */}
-              {store.hasSeating === 'yes' && store.seatTypes && store.seatTypes.length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {store.seatTypes.map((type) => {
-                    const meta = SEAT_TYPE_META[type];
-                    if (!meta) return null;
-                    return (
-                      <Badge
-                        key={type}
-                        variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
-                      >
-                        {meta.emoji} {meta.label}
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* 시간 + 제보자 */}
-              <div className="flex items-center text-xs text-gray-500 mb-3">
-                <div className="flex items-center flex-1">
-                  <Clock className="h-3 w-3 mr-1" />
-                  <span>{formatDate(store.lastUpdated)}</span>
-                </div>
-                {store.reportedBy && (
-                  <div className="flex items-center">
-                    <User className="h-3 w-3 mr-1" />
-                    <span>{store.reportedBy}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 설명 / 미확인 안내 */}
-              {store.hasSeating === 'unknown' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionType('edit');
-                    setIsEditingStore(true);
-                    setIsEditDialogOpen(true);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-2.5 text-left text-sm text-blue-700 transition-colors hover:bg-blue-50"
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEditDialogOpen(true)}
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  aria-label="정보 수정"
                 >
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>좌석 정보가 아직 없어요. 눌러서 제보해주세요</span>
-                </button>
-              ) : (
-                store.notes && (
-                  <div className="rounded bg-gray-50 p-2.5 text-sm">
-                    <div className="flex items-start">
-                      <MessageSquare className="h-3 w-3 mr-1.5 mt-0.5 text-gray-400 shrink-0" />
-                      <span className="text-gray-700">{formatNotes(store.notes, store.hasSeating)}</span>
-                    </div>
-                  </div>
-                )
+                  <Edit2 className="h-4 w-4" />
+                </Button>
               )}
+              {canDelete() && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  aria-label="삭제"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+              <Badge className={`${getSeatingBadgeClass(store.hasSeating)} rounded-full`}>
+                {getSeatingStatusText(store.hasSeating)}
+              </Badge>
             </div>
           </div>
+
+          {/* 좌석 형태 뱃지 */}
+          {store.hasSeating === 'yes' && store.seatTypes && store.seatTypes.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {store.seatTypes.map((type) => {
+                const meta = SEAT_TYPE_META[type];
+                if (!meta) return null;
+                return (
+                  <Badge
+                    key={type}
+                    variant="outline"
+                    className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    {meta.emoji} {meta.label}
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 시간 + 제보자 */}
+          <div className="mb-3 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex flex-1 items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {formatDate(store.lastUpdated)}
+            </span>
+            {store.reportedBy && (
+              <span className="flex items-center gap-1">
+                <User className="h-3 w-3" />
+                {store.reportedBy}
+              </span>
+            )}
+          </div>
+
+          {/* 설명 / 미확인 안내 */}
+          {store.hasSeating === 'unknown' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setActionType('edit');
+                setIsEditingStore(true);
+                setIsEditDialogOpen(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-2.5 text-left text-sm text-primary transition-colors hover:bg-primary/10"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>좌석 정보가 아직 없어요. 눌러서 제보해주세요</span>
+            </button>
+          ) : (
+            store.notes && (
+              <div className="rounded-xl bg-muted/60 p-2.5 text-sm">
+                <div className="flex items-start gap-1.5">
+                  <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="text-foreground/80">{formatNotes(store.notes, store.hasSeating)}</span>
+                </div>
+              </div>
+            )
+          )}
         </CardContent>
       </Card>
 
@@ -191,18 +188,15 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
           setIsEditingStore(false);
         }
       }}>
-        <SheetContent side="right" className="w-full max-w-2xl bg-white flex flex-col p-0">
+        <SheetContent side="right" className="flex w-full max-w-md flex-col bg-card p-0 sm:max-w-lg">
           <SheetTitle className="sr-only">편의점 정보 수정</SheetTitle>
           <SheetDescription className="sr-only">편의점 정보를 확인하고 필요한 내용을 수정합니다.</SheetDescription>
-          <div className="overflow-y-auto flex-1 p-6">
+          <div className="flex-1 overflow-y-auto p-6">
             {isEditingStore ? (
               <>
                 {/* 수정 모드 */}
-                <div className="mb-6 pb-4 border-b border-slate-200">
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                    <span className="text-xl">✏️</span>
-                    {store.name} 정보 수정
-                  </h2>
+                <div className="mb-6 border-b border-border pb-4">
+                  <h2 className="text-xl font-bold text-foreground">{store.name} 정보 수정</h2>
                 </div>
 
                 <ReportForm
@@ -220,24 +214,19 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
             ) : (
               <>
                 {/* 정보 조회 모드 */}
-                <div className="mb-6 pb-4 border-b border-slate-200">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">{store.name}</h2>
-                      <div className="flex items-center text-gray-600 text-sm mt-2 gap-1">
-                        <MapPin className="h-4 w-4 text-blue-600" />
+                <div className="mb-6 border-b border-border pb-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-xl font-bold text-foreground">{store.name}</h2>
+                      <div className="mt-2 flex items-start gap-1 text-sm text-muted-foreground">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                         <p className="line-clamp-2">{store.address}</p>
                       </div>
                     </div>
                     <div>
-                      {(() => {
-                        const { bg, text } = getSeatingBadgeStyle(store.hasSeating);
-                        return (
-                          <Badge className={`${bg} ${text} hover:${bg} text-xs px-3 py-1`}>
-                            {getSeatingStatusText(store.hasSeating)}
-                          </Badge>
-                        );
-                      })()}
+                      <Badge className={`${getSeatingBadgeClass(store.hasSeating)} rounded-full px-3 py-1 text-xs`}>
+                        {getSeatingStatusText(store.hasSeating)}
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -309,22 +298,22 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                   )}
 
                   {/* 최근 업데이트 */}
-                  <Card>
+                  <Card className="rounded-2xl border-border/70">
                     <CardContent className="p-4">
                       <div className="space-y-3">
                         <div className="flex items-start gap-3">
-                          <Clock className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
+                          <Clock className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-gray-500">최근 업데이트</p>
-                            <p className="font-semibold text-gray-900">{formatDate(store.lastUpdated)}</p>
+                            <p className="text-xs text-muted-foreground">최근 업데이트</p>
+                            <p className="font-semibold text-foreground">{formatDate(store.lastUpdated)}</p>
                           </div>
                         </div>
                         {store.reportedBy && (
-                          <div className="flex items-start gap-3 pt-2 border-t border-gray-100">
-                            <User className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
+                          <div className="flex items-start gap-3 border-t border-border pt-2">
+                            <User className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
                             <div>
-                              <p className="text-xs text-gray-500">제보자</p>
-                              <p className="font-semibold text-gray-900">{store.reportedBy}</p>
+                              <p className="text-xs text-muted-foreground">제보자</p>
+                              <p className="font-semibold text-foreground">{store.reportedBy}</p>
                             </div>
                           </div>
                         )}
@@ -334,16 +323,16 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
 
                   {/* 상세 정보 */}
                   {store.notes ? (
-                    <Card>
+                    <Card className="rounded-2xl border-border/70">
                       <CardContent className="p-4">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3">상세 정보</h3>
-                        <p className="text-sm text-gray-700 leading-relaxed">{store.notes}</p>
+                        <h3 className="mb-3 text-sm font-semibold text-foreground">상세 정보</h3>
+                        <p className="text-sm leading-relaxed text-foreground/80">{store.notes}</p>
                       </CardContent>
                     </Card>
                   ) : (
-                    <Card className="bg-gray-50">
+                    <Card className="rounded-2xl border-border/70 bg-muted/40">
                       <CardContent className="p-4 text-center">
-                        <p className="text-sm text-gray-500">좌석 형태/비고 정보가 아직 없습니다.</p>
+                        <p className="text-sm text-muted-foreground">좌석 형태/비고 정보가 아직 없습니다.</p>
                       </CardContent>
                     </Card>
                   )}
@@ -354,28 +343,28 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
 
           {/* 고정 버튼 영역 (스크롤 상관없이 항상 보임) */}
           {!isEditingStore && (
-            <div className="border-t border-slate-200 p-6 bg-white space-y-3">
+            <div className="space-y-3 border-t border-border bg-card p-6">
               <Button
-                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-base"
+                className="h-12 w-full rounded-xl text-base font-semibold"
                 onClick={() => {
                   setActionType('edit');
                   setIsEditingStore(true);
                 }}
               >
-                <Edit2 className="h-5 w-5 mr-2" />
+                <Edit2 className="mr-2 h-5 w-5" />
                 정보 수정하기
               </Button>
               <Button
                 variant="outline"
-                className="w-full h-12 border-2 border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold rounded-lg"
+                className="h-12 w-full rounded-xl border-2 border-amber-300 font-semibold text-amber-700 hover:bg-amber-50"
                 onClick={() => {
                   setActionType('warning');
                   setIsEditingStore(true);
                 }}
               >
-                <AlertCircle className="h-5 w-5 mr-2" />
+                <AlertCircle className="mr-2 h-5 w-5" />
                 <div className="flex flex-col items-start">
-                  <span className="text-base">⚠️ 실제와 다른가요?</span>
+                  <span className="text-base">실제와 다른가요?</span>
                   <span className="text-xs opacity-80">잘못된 정보를 제보해주세요</span>
                 </div>
               </Button>
