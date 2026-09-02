@@ -10,6 +10,20 @@ export type SeatType = "bar" | "table" | "parasol" | "standing";
 
 export const SEAT_TYPE_VALUES: SeatType[] = ["bar", "table", "parasol", "standing"];
 
+/**
+ * 편의점 브랜드 필터 옵션. 여러 컴포넌트에서 공유한다.
+ * 'all'은 전체를 의미하는 특수값.
+ */
+export const BRAND_OPTIONS = [
+  "all",
+  "CU",
+  "GS25",
+  "세븐일레븐",
+  "이마트24",
+  "미니스톱",
+  "씨스페이스",
+] as const;
+
 export interface Store {
   id: string;
   name: string;

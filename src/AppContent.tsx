@@ -1,15 +1,16 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { PlusCircle, X } from 'lucide-react';
 import { Logo } from './components/ui/Logo';
 import { toast } from 'sonner';
 import { Button } from './components/ui/button';
-import { ConvenienceStoreList } from './components/ConvenienceStoreList';
+import { BottomSheetList } from './components/BottomSheetList';
 import { MapView } from './components/MapView';
 import { ReportForm } from './components/ReportForm';
 import { useStore } from './context/StoreContext';
 
 export function AppContent() {
   const { stores, isLoading, refreshStores, isReportOpen, selectedStoreData, openReport, closeReport } = useStore();
+  const [sheetExpanded, setSheetExpanded] = useState(false);
 
   const handleReportSuccess = useCallback(() => {
     closeReport();
@@ -18,93 +19,73 @@ export function AppContent() {
 
   const handleStoreSelect = useCallback((storeInfo: { name: string; address: string; latitude?: number; longitude?: number }) => {
     openReport(storeInfo);
-    
-    const message = storeInfo.name 
+
+    const message = storeInfo.name
       ? `${storeInfo.name}이(가) 선택되었습니다. 좌석 정보를 입력해주세요.`
       : '선택한 위치의 주소가 입력되었습니다. 편의점 정보를 입력해주세요.';
-    
+
     toast.success(message);
   }, [openReport]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b bg-white">
-        <div className="max-w-4xl mx-auto w-full px-4 py-4 md:py-5">
-          <div className="flex w-full items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex h-12 items-center gap-1 pl-0">
-                <Logo size={40} className="mr-0" />
-                <h1 className="text-xl font-semibold text-slate-900">
-                  <span>편</span>
-                  <span style={{ fontSize: '0.7em', color: '#6b7280', marginLeft: 2 }}>(하게)</span>
-                  &nbsp;
-                  <span>의</span>
-                  <span style={{ fontSize: '0.7em', color: '#6b7280', marginLeft: 2 }}>(자에 앉을 수 있는)</span>
-                  &nbsp;점
-                </h1>
-              </div>
-               <p className="text-sm text-slate-600 pl-20">
-                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;주변 편의점 좌석 유무와 형태를 먼저 확인하고, 제보하세요.
-               </p>
-            </div>
+    <div className="relative h-screen w-full overflow-hidden bg-background">
+      {/* 지도: 화면 전체를 채우는 배경 */}
+      <div className="absolute inset-0">
+        <MapView stores={stores} onStoreSelect={handleStoreSelect} />
+      </div>
 
-            <div className="shrink-0">
-              <Button
-                type="button"
-                onClick={() => isReportOpen ? closeReport() : openReport()}
-                aria-expanded={isReportOpen}
-                className="h-12 shrink-0 rounded-xl bg-blue-600 px-5 text-base font-semibold leading-none shadow-sm hover:bg-blue-700"
-              >
-                {isReportOpen ? <X className="mr-2 h-5 w-5" /> : <PlusCircle className="mr-2 h-5 w-5" />}
-                {isReportOpen ? '제보 닫기' : '좌석 제보'}
-              </Button>
+      {/* 플로팅 헤더 */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
+        <div className="pointer-events-auto mx-auto flex max-w-2xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/85 px-4 py-2.5 shadow-lg backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <Logo size={32} />
+            <div className="leading-tight">
+              <h1 className="text-base font-semibold text-foreground">편의점 좌석 찾기</h1>
+              <p className="text-xs text-muted-foreground">좌석 유무·형태를 확인하고 제보하세요</p>
             </div>
           </div>
+          <Button
+            type="button"
+            onClick={() => (isReportOpen ? closeReport() : openReport())}
+            aria-expanded={isReportOpen}
+            size="sm"
+            className="shrink-0 rounded-xl"
+          >
+            {isReportOpen ? <X className="mr-1 h-4 w-4" /> : <PlusCircle className="mr-1 h-4 w-4" />}
+            {isReportOpen ? '닫기' : '제보'}
+          </Button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-4 md:py-5">
-        <section className="space-y-4">
-          {isReportOpen && (
-            <div className="relative mt-2 mb-2 rounded-xl border bg-white p-2 md:p-2.5 shadow-sm overflow-visible">
-              <div className="flex items-start justify-between gap-3 border-b pb-3 mb-2">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">좌석 정보 제보</h2>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={closeReport}
-                  aria-label="제보 패널 닫기"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+      {/* 하단 바텀시트 목록 */}
+      <BottomSheetList
+        stores={stores}
+        isLoading={isLoading}
+        onRefresh={refreshStores}
+        onDelete={() => {}}
+        expanded={sheetExpanded}
+        onExpandedChange={setSheetExpanded}
+      />
 
+      {/* 제보 폼 오버레이 */}
+      {isReportOpen && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center bg-foreground/30 backdrop-blur-sm sm:items-center">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">좌석 정보 제보</h2>
+              <Button variant="ghost" size="icon" onClick={closeReport} aria-label="제보 패널 닫기">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="overflow-y-auto px-5 py-5">
               <ReportForm
                 onSuccess={handleReportSuccess}
                 initialData={selectedStoreData || undefined}
               />
             </div>
-          )}
-
-          <div className="rounded-xl border bg-white p-3">
-            <MapView
-              stores={stores}
-              onStoreSelect={handleStoreSelect}
-            />
           </div>
-
-          <div className="mt-6">
-            <ConvenienceStoreList
-              stores={stores}
-              isLoading={isLoading}
-              onRefresh={refreshStores}
-              onDelete={() => {}}
-            />
-          </div>
-        </section>
-      </main>
+        </div>
+      )}
     </div>
   );
 }

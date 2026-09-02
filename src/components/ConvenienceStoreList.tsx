@@ -2,17 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { StoreItem } from './StoreItem';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardHeader, CardTitle } from './ui/card';
 import { Switch } from './ui/switch';
 import { RefreshCw, Search, X, List, HelpCircle } from 'lucide-react';
-import { Store, SeatType, SEAT_TYPE_VALUES } from '../types/store';
+import { Store, SeatType, SEAT_TYPE_VALUES, BRAND_OPTIONS } from '../types/store';
 import { SEAT_TYPE_META } from '../utils/formatters';
+import { useStore } from '../context/StoreContext';
 
 interface ConvenienceStoreListProps {
   stores: Store[];
   isLoading: boolean;
   onRefresh: () => void;
   onDelete: (storeId: string) => void;
+  /** 바텀시트 등에 임베드할 때 Card 래퍼/헤더를 생략한다. */
+  embedded?: boolean;
 }
 
 const ITEMS_PER_PAGE = 20; // 한 번에 보여줄 항목 수
@@ -21,18 +24,24 @@ export function ConvenienceStoreList({
   stores, 
   isLoading, 
   onRefresh, 
-  onDelete 
+  onDelete,
+  embedded = false,
 }: ConvenienceStoreListProps) {
+  // 좌석 형태·브랜드 필터는 지도와 공유(Context)한다.
+  const {
+    seatTypeFilter: selectedSeatTypes,
+    toggleSeatTypeFilter: toggleSeatTypeFilterCtx,
+    clearSeatTypeFilter,
+    brandFilter: selectedBrand,
+    setBrandFilter: setSelectedBrand,
+  } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('all');
-  // 좌석 형태 필터. 선택된 형태가 하나라도 있으면 "좌석 있음 + 해당 형태 포함" 매장만 노출한다.
-  const [selectedSeatTypes, setSelectedSeatTypes] = useState<SeatType[]>([]);
   // 좌석 정보가 확인된 매장(있음/없음)만 보기. 콜드스타트 시 물음표(unknown) 매장을 숨겨 첫인상을 개선한다.
   const [hideUnknown, setHideUnknown] = useState(false);
   const [filteredStores, setFilteredStores] = useState(stores);
   const [displayedItemsCount, setDisplayedItemsCount] = useState(ITEMS_PER_PAGE);
   const observerTarget = useRef<HTMLDivElement>(null);
-  const brandOptions = ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
+  const brandOptions = BRAND_OPTIONS;
 
   const filterStores = useCallback(
     (query: string, brand: string, seatTypes: SeatType[], onlyConfirmed: boolean) => {
@@ -73,10 +82,8 @@ export function ConvenienceStoreList({
 
   const toggleSeatTypeFilter = useCallback((type: SeatType) => {
     setDisplayedItemsCount(ITEMS_PER_PAGE);
-    setSelectedSeatTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
-  }, []);
+    toggleSeatTypeFilterCtx(type);
+  }, [toggleSeatTypeFilterCtx]);
 
   // 검색 기능
   const handleSearch = useCallback((query: string) => {
@@ -141,27 +148,8 @@ export function ConvenienceStoreList({
   const confirmedCount = stores.filter(store => store.hasSeating !== 'unknown').length;
   const noConfirmedData = confirmedCount === 0 && stores.length > 0;
 
-  return (
-    <Card className="w-full gap-4">
-      <CardHeader className="px-6 pb-2 pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <CardTitle className="flex items-center space-x-2 text-lg font-semibold">
-            <List className="h-5 w-5" />
-            <span>제보된 편의점 목록</span>
-          </CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onRefresh}
-            disabled={isLoading}
-            className="shrink-0"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3 px-6 pb-5 pt-0">
+  const body = (
+    <div className={embedded ? 'space-y-3' : 'space-y-3 px-6 pb-5 pt-0'}>
         {/* 검색 바 */}
         <div className="flex space-x-2">
           <div className="relative flex-1">
@@ -227,7 +215,7 @@ export function ConvenienceStoreList({
             <button
               type="button"
               onClick={() => {
-                setSelectedSeatTypes([]);
+                clearSeatTypeFilter();
                 setDisplayedItemsCount(ITEMS_PER_PAGE);
               }}
               className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-gray-400 hover:text-gray-600"
@@ -339,7 +327,35 @@ export function ConvenienceStoreList({
             )}
           </div>
         )}
-      </CardContent>
+    </div>
+  );
+
+  // 바텀시트 등에 임베드할 때는 Card 래퍼/헤더 없이 본문만 렌더한다.
+  if (embedded) {
+    return body;
+  }
+
+  return (
+    <Card className="w-full gap-4">
+      <CardHeader className="px-6 pb-2 pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className="flex items-center space-x-2 text-lg font-semibold">
+            <List className="h-5 w-5" />
+            <span>제보된 편의점 목록</span>
+          </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="shrink-0"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            새로고침
+          </Button>
+        </div>
+      </CardHeader>
+      {body}
     </Card>
   );
 }

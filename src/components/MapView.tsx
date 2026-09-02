@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, StoreSelectInfo, SeatType, SEAT_TYPE_VALUES } from '../types/store';
+import { Store, StoreSelectInfo, SEAT_TYPE_VALUES, BRAND_OPTIONS } from '../types/store';
 import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
 // import { InfoWindow } from './InfoWindow';
 import { Button } from './ui/button';
@@ -44,7 +44,14 @@ interface MapViewProps {
 }
 
 export function MapView({ stores, onStoreSelect }: MapViewProps) {
-  const { refreshStores } = useStore();
+  const {
+    refreshStores,
+    seatTypeFilter: selectedSeatTypes,
+    toggleSeatTypeFilter,
+    clearSeatTypeFilter,
+    brandFilter: selectedBrand,
+    setBrandFilter: setSelectedBrand,
+  } = useStore();
   // const [infoWindowPosition, setInfoWindowPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isMapAvailable, setIsMapAvailable] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -55,9 +62,6 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const [keyword, setKeyword] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchInputResetKey, setSearchInputResetKey] = useState(0);
-  const [selectedBrand, setSelectedBrand] = useState('all');
-  // 좌석 형태 필터. 활성화되면 해당 형태를 모두 갖춘(좌석 있음) 매장만 지도에 표시한다.
-  const [selectedSeatTypes, setSelectedSeatTypes] = useState<SeatType[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [pendingReportSelection, setPendingReportSelection] = useState<StoreSelectInfo | null>(null);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -177,6 +181,26 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     return '좌석: 확인 필요';
   }, []);
 
+  // 좌석 상태별 마커 이미지를 반환한다. (있음=초록, 없음=빨강, 미확인/없는매장=회색)
+  // 외부 이미지 파일 대신 인라인 SVG data URI로 생성해 base 경로/확장자 문제를 회피한다.
+  const getMarkerImage = useCallback((hasSeating?: Store['hasSeating']) => {
+    if (!window.kakao?.maps) return undefined;
+
+    const fill =
+      hasSeating === 'yes' ? '#22c55e' : hasSeating === 'no' ? '#ef4444' : '#94a3b8';
+
+    // 아래가 뾰족한 물방울(핀) 모양. 너비 30, 높이 42 기준.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">
+      <path d="M15 41C15 41 27 25.5 27 15C27 8.4 21.6 3 15 3C8.4 3 3 8.4 3 15C3 25.5 15 41 15 41Z" fill="${fill}" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="15" cy="15" r="5" fill="#ffffff"/>
+    </svg>`;
+
+    const src = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    const size = new window.kakao.maps.Size(30, 42);
+    const options = { offset: new window.kakao.maps.Point(15, 42) };
+    return new window.kakao.maps.MarkerImage(src, size, options);
+  }, []);
+
   // 선택된 좌석 형태 필터를 매장이 만족하는지 검사한다. 필터가 비어있으면 항상 통과.
   const matchesSeatTypeFilter = useCallback(
     (store?: Store) => {
@@ -188,11 +212,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     [selectedSeatTypes],
   );
 
-  const toggleSeatTypeFilter = useCallback((type: SeatType) => {
-    setSelectedSeatTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
-  }, []);
+
 
   const buildInfoWindowContent = useCallback(
     (name: string, address: string, store?: Store) => {
@@ -223,7 +243,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         </div>`;
 
       return `
-        <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
+        <div style="padding:10px;font-size:11px;line-height:1.5;width:260px;font-family:Pretendard,-apple-system,'Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;box-sizing:border-box;overflow:hidden;">
           <strong style="font-size:12px;display:block;margin-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;">${name}</strong>
           <div style="color:#666;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">
             ${address}
@@ -454,7 +474,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     return kakaoSdkLoadPromise;
   }, [resolveKakaoApiKey]);
 
-  const brandOptions = useMemo(() => ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'], []);
+  const brandOptions = useMemo(() => BRAND_OPTIONS, []);
 
   const hasSearchQuery = keyword.trim().length > 0;
   const hasNearbyResults = hasSearchQuery && nearbyPlaces.length > 0;
@@ -577,13 +597,14 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           clearMarkers(placeMarkersRef.current);
 
           visiblePlaces.forEach((place) => {
+            const matchedStore = findBestMatchedStore(place);
+
             const marker = new window.kakao.maps.Marker({
               map: mapRef.current,
               position: new window.kakao.maps.LatLng(place.latitude, place.longitude),
               title: place.name,
+              image: getMarkerImage(matchedStore?.hasSeating),
             });
-
-            const matchedStore = findBestMatchedStore(place);
 
             const infoWindow = new window.kakao.maps.InfoWindow({
               content: buildInfoWindowContent(place.name, place.address, matchedStore),
@@ -614,7 +635,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         searchOptions,
       );
     },
-    [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand, selectedSeatTypes, matchesSeatTypeFilter],
+    [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand, selectedSeatTypes, matchesSeatTypeFilter, getMarkerImage],
   );
 
   const moveToUserLocation = useCallback(() => {
@@ -855,6 +876,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
     stores.forEach((store) => {
       if (!store.latitude || !store.longitude) return;
+      // 브랜드 필터: 'all'이 아니면 선택한 브랜드명을 포함하는 매장만 표시
+      if (selectedBrand !== 'all' && !String(store.name || '').includes(selectedBrand)) return;
       // 좌석 형태 필터가 켜져 있으면 조건을 만족하는 매장만 마커로 표시
       if (!matchesSeatTypeFilter(store)) return;
 
@@ -862,6 +885,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         map: mapRef.current,
         position: new window.kakao.maps.LatLng(store.latitude, store.longitude),
         title: store.name,
+        image: getMarkerImage(store.hasSeating),
       });
 
       const infoWindow = new window.kakao.maps.InfoWindow({
@@ -880,7 +904,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
       reportMarkersRef.current.push(marker);
     });
-  }, [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, isMapReady, stores, matchesSeatTypeFilter]);
+  }, [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, isMapReady, stores, matchesSeatTypeFilter, getMarkerImage, selectedBrand]);
 
   // selectedStore가 업데이트되면 infowindow도 자동으로 갱신
   useEffect(() => {
@@ -944,154 +968,174 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm space-y-3">
-        <form onSubmit={handleSearchSubmit} className="flex items-start gap-2">
-          <div className="relative flex-1">
-            <Input
-              key={searchInputResetKey}
-              ref={searchInputRef}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setTimeout(() => setIsSearchFocused(false), 120)}
-              placeholder="전체 지역 편의점 검색 (예: 을지로입구, 제주공항)"
-              className="h-10 pr-10 text-base"
-            />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
+    <div className="relative h-full w-full overflow-hidden">
+      {/* 지도: 컨테이너 전체를 채우는 배경 */}
+      <div
+        id="map"
+        ref={mapContainer}
+        className="absolute inset-0 h-full w-full"
+        aria-label="편의점 위치 지도"
+        role="region"
+      />
+
+      {!isMapReady && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+          <div className="rounded-full bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg">
+            지도를 불러오는 중... (최대 20초)
           </div>
-
-          <Button type="submit" className="h-10" disabled={!isMapReady || isSearching}>
-            {isSearching ? '검색중' : '검색'}
-          </Button>
-        </form>
-
-        {isSearchFocused && hasNearbyResults && (
-          <div className="rounded-xl border border-white/60 bg-white/55 backdrop-blur-md shadow-md overflow-hidden">
-            <div className="max-h-72 overflow-y-auto">
-            {nearbyPlaces.slice(0, 8).map((place) => (
-              <button
-                key={place.id}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleNearbyPlaceSelect(place);
-                }}
-                className="w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
-              >
-                <div className="text-sm font-medium text-slate-900 truncate">{place.name}</div>
-                <div className="text-xs text-slate-500 truncate">{place.address}</div>
-              </button>
-            ))}
-            </div>
-          </div>
-        )}
-
-        {isSearchFocused && hasNoNearbyResults && (
-          <div className="rounded-xl border border-white/60 bg-white/55 backdrop-blur-md px-4 py-3 text-sm text-slate-500 shadow-md">
-            관련 이름이 없습니다.
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {brandOptions.map((brand) => (
-            <Button
-              key={brand}
-              type="button"
-              variant={selectedBrand === brand ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedBrand(brand)}
-            >
-              {brand === 'all' ? '전체' : brand}
-            </Button>
-          ))}
-          <Button type="button" variant="outline" size="sm" onClick={moveToUserLocation}>
-            <Navigation className="h-4 w-4 mr-1" />
-            내 위치
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={refreshNearbyStores}>
-            <RefreshCw className="h-4 w-4 mr-1" />
-            새로고침
-          </Button>
         </div>
+      )}
 
-        {/* 좌석 형태 필터 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-slate-600">좌석 형태</span>
-          {SEAT_TYPE_VALUES.map((type) => {
-            const meta = SEAT_TYPE_META[type];
-            const active = selectedSeatTypes.includes(type);
-            return (
+      {/* 상단 플로팅: 검색 + 필터 (헤더 아래 여백 확보) */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-20 sm:px-4 sm:pt-24">
+        <div className="pointer-events-auto mx-auto w-full max-w-2xl space-y-2">
+          {/* 검색바 */}
+          <div className="relative">
+            <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <Input
+                  key={searchInputResetKey}
+                  ref={searchInputRef}
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 120)}
+                  placeholder="지역·편의점 검색 (예: 을지로입구)"
+                  className="h-11 rounded-2xl border-border/60 bg-card/90 pl-10 shadow-lg backdrop-blur-md"
+                />
+              </div>
+              <Button type="submit" className="h-11 rounded-2xl shadow-lg" disabled={!isMapReady || isSearching}>
+                {isSearching ? '검색중' : '검색'}
+              </Button>
+            </form>
+
+            {/* 검색 결과 드롭다운 */}
+            {isSearchFocused && hasNearbyResults && (
+              <div className="absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-xl backdrop-blur-md">
+                <div className="max-h-72 overflow-y-auto">
+                  {nearbyPlaces.slice(0, 8).map((place) => (
+                    <button
+                      key={place.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleNearbyPlaceSelect(place);
+                      }}
+                      className="w-full border-b border-border/50 px-4 py-3 text-left last:border-b-0 hover:bg-accent"
+                    >
+                      <div className="truncate text-sm font-medium text-foreground">{place.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">{place.address}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isSearchFocused && hasNoNearbyResults && (
+              <div className="absolute inset-x-0 top-full z-30 mt-2 rounded-2xl border border-border/60 bg-card/95 px-4 py-3 text-sm text-muted-foreground shadow-xl backdrop-blur-md">
+                관련 이름이 없습니다.
+              </div>
+            )}
+          </div>
+
+          {/* 브랜드 필터 (가로 스크롤) */}
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {brandOptions.map((brand) => (
               <button
-                key={type}
+                key={brand}
                 type="button"
-                onClick={() => toggleSeatTypeFilter(type)}
-                aria-pressed={active}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? 'border-emerald-500 bg-emerald-500 text-white'
-                    : 'border-white/60 bg-white/70 text-slate-600 hover:border-emerald-300 hover:text-emerald-700'
+                onClick={() => setSelectedBrand(brand)}
+                className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-md transition-colors ${
+                  selectedBrand === brand
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border/60 bg-card/85 text-foreground hover:bg-accent'
                 }`}
               >
-                {meta.emoji} {meta.label}
+                {brand === 'all' ? '전체' : brand}
               </button>
-            );
-          })}
-          {selectedSeatTypes.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedSeatTypes([])}
-              className="rounded-full px-2 py-1 text-xs text-slate-400 hover:text-slate-600"
-            >
-              초기화
-            </button>
-          )}
-        </div>
-
-        {nearbyPlaces.length > 0 && (
-          <div className="text-sm text-gray-600">
-            전체 검색 결과 {nearbyPlaces.length}개. 목록에서 선택해 해당 위치로 이동하거나 핀을 클릭해 확인하세요.
+            ))}
           </div>
-        )}
+
+          {/* 좌석 형태 필터 (가로 스크롤) */}
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {SEAT_TYPE_VALUES.map((type) => {
+              const meta = SEAT_TYPE_META[type];
+              const active = selectedSeatTypes.includes(type);
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleSeatTypeFilter(type)}
+                  aria-pressed={active}
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-md transition-colors ${
+                    active
+                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      : 'border-border/60 bg-card/85 text-foreground hover:bg-accent'
+                  }`}
+                >
+                  {meta.emoji} {meta.label}
+                </button>
+              );
+            })}
+            {selectedSeatTypes.length > 0 && (
+              <button
+                type="button"
+                onClick={clearSeatTypeFilter}
+                className="shrink-0 rounded-full px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                초기화
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-slate-300 bg-linear-to-br from-slate-50 via-white to-blue-50 shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">지도</div>
-            <div className="text-xs text-slate-500">클릭해서 위치를 선택할 수 있습니다</div>
-          </div>
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
-            {isMapReady ? '지도 준비됨' : '불러오는 중'}
-          </div>
-        </div>
-
-        <div
-          id="map"
-          ref={mapContainer}
-          className="w-full"
-          style={{ height: 'clamp(320px, 55vh, 600px)', minHeight: '320px' }}
-          aria-label="편의점 위치 지도"
-          role="region"
-        />
-        {!isMapReady && (
-          <div className="absolute inset-[49px_0_0_0] flex items-center justify-center bg-white/80 backdrop-blur-sm">
-            <div className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm">
-              지도를 불러오는 중... (최대 20초)
-            </div>
-          </div>
-        )}
+      {/* 우측 플로팅 액션 (내 위치 / 새로고침) */}
+      <div className="absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2 sm:right-4">
+        <button
+          type="button"
+          onClick={moveToUserLocation}
+          aria-label="내 위치로 이동"
+          title="내 위치"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card/90 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent"
+        >
+          <Navigation className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={refreshNearbyStores}
+          aria-label="주변 편의점 새로고침"
+          title="새로고침"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card/90 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-accent"
+        >
+          <RefreshCw className="h-5 w-5" />
+        </button>
       </div>
 
+      {/* 좌하단 플로팅 범례 */}
+      <div className="pointer-events-none absolute bottom-[136px] left-3 z-20 flex items-center gap-2.5 rounded-full border border-border/60 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur-md sm:left-4">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> 있음
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> 없음
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" /> 미확인
+        </span>
+      </div>
+
+      {/* 선택한 위치 제보 배너 (플로팅) */}
       {pendingReportSelection && (
-        <div className="rounded-lg border bg-white p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <div className="text-sm font-medium text-gray-900">{pendingReportSelection.name || '선택한 위치'}</div>
-            <div className="text-xs text-gray-600 line-clamp-1">{pendingReportSelection.address || '주소 정보 없음'}</div>
+        <div className="absolute inset-x-3 bottom-[136px] z-20 mx-auto flex max-w-md flex-col gap-2 rounded-2xl border border-border/60 bg-card/95 p-3 shadow-xl backdrop-blur-md sm:inset-x-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-foreground">{pendingReportSelection.name || '선택한 위치'}</div>
+            <div className="truncate text-xs text-muted-foreground">{pendingReportSelection.address || '주소 정보 없음'}</div>
           </div>
-          <Button type="button" onClick={() => onStoreSelect(pendingReportSelection)}>
+          <Button type="button" className="shrink-0 rounded-xl" onClick={() => onStoreSelect(pendingReportSelection)}>
             이 위치로 제보하기
           </Button>
         </div>

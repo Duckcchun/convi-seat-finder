@@ -1,4 +1,7 @@
-import { Store, SeatType } from '../types/store';
+import { Store, SeatType, BRAND_OPTIONS } from '../types/store';
+
+/** 'all'을 제외한 실제 편의점 브랜드 목록 */
+export const BRAND_NAMES = BRAND_OPTIONS.filter((b) => b !== 'all');
 
 /**
  * 좌석 형태 표시 정보 (라벨 + 이모지).
@@ -67,7 +70,7 @@ export const getSeatingStatusText = (hasSeating: Store['hasSeating']): string =>
 };
 
 /**
- * 좌석 상태별 배지 스타일 정보
+ * 좌석 상태별 배지 스타일 정보 (bg/text 분리 형태, 레거시)
  */
 export const getSeatingBadgeStyle = (hasSeating: Store['hasSeating']): { bg: string; text: string } => {
   switch (hasSeating) {
@@ -77,6 +80,21 @@ export const getSeatingBadgeStyle = (hasSeating: Store['hasSeating']): { bg: str
       return { bg: 'bg-red-100', text: 'text-red-800' };
     default:
       return { bg: 'bg-gray-100', text: 'text-gray-800' };
+  }
+};
+
+/**
+ * 좌석 상태별 배지에 적용할 완전한 정적 클래스 문자열.
+ * (동적 조합 hover:${bg} 대신 Tailwind가 정적으로 스캔할 수 있는 클래스를 반환한다)
+ */
+export const getSeatingBadgeClass = (hasSeating: Store['hasSeating']): string => {
+  switch (hasSeating) {
+    case 'yes':
+      return 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100';
+    case 'no':
+      return 'bg-red-100 text-red-700 hover:bg-red-100';
+    default:
+      return 'bg-muted text-muted-foreground hover:bg-muted';
   }
 };
 
@@ -127,8 +145,7 @@ export const getSeatingStats = (stores: Store[]) => {
  * 편의점 이름으로 브랜드 파악
  */
 export const extractBrandFromName = (name: string): string => {
-  const brands = ['CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
-  const found = brands.find((brand) => name.includes(brand));
+  const found = BRAND_NAMES.find((brand) => name.includes(brand));
   return found || 'Other';
 };
 

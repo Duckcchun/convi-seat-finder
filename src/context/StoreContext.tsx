@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Store, StoreSelectInfo } from '../types/store';
+import { Store, StoreSelectInfo, SeatType } from '../types/store';
 import { useStoreData } from '../hooks/useStoreData';
 
 interface StoreContextType {
@@ -11,6 +11,13 @@ interface StoreContextType {
   // UI State
   isReportOpen: boolean;
   selectedStoreData: StoreSelectInfo | null;
+
+  // 공유 필터 상태 (지도/목록이 함께 사용)
+  seatTypeFilter: SeatType[];
+  toggleSeatTypeFilter: (type: SeatType) => void;
+  clearSeatTypeFilter: () => void;
+  brandFilter: string; // 'all' | 브랜드명
+  setBrandFilter: (brand: string) => void;
 
   // Actions
   refreshStores: () => Promise<void>;
@@ -24,6 +31,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const { stores, isLoading, error, refreshStores } = useStoreData();
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [selectedStoreData, setSelectedStoreData] = useState<StoreSelectInfo | null>(null);
+  const [seatTypeFilter, setSeatTypeFilter] = useState<SeatType[]>([]);
+  const [brandFilter, setBrandFilter] = useState<string>('all');
 
   const openReport = useCallback((storeData?: StoreSelectInfo) => {
     setSelectedStoreData(storeData || null);
@@ -35,12 +44,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setSelectedStoreData(null);
   }, []);
 
+  const toggleSeatTypeFilter = useCallback((type: SeatType) => {
+    setSeatTypeFilter((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    );
+  }, []);
+
+  const clearSeatTypeFilter = useCallback(() => setSeatTypeFilter([]), []);
+
   const value: StoreContextType = {
     stores,
     isLoading,
     error,
     isReportOpen,
     selectedStoreData,
+    seatTypeFilter,
+    toggleSeatTypeFilter,
+    clearSeatTypeFilter,
+    brandFilter,
+    setBrandFilter,
     refreshStores,
     openReport,
     closeReport,
