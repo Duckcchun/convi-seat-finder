@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, StoreSelectInfo } from '../types/store';
+import { Store, StoreSelectInfo, SeatType, SEAT_TYPE_VALUES } from '../types/store';
 import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
 // import { InfoWindow } from './InfoWindow';
 import { Button } from './ui/button';
@@ -9,7 +9,8 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import { ReportForm } from './ReportForm';
-import { getSeatingBadgeStyle, getSeatingStatusText, formatDate } from '../utils/formatters';
+import { getSeatingBadgeStyle, getSeatingStatusText, formatDate, formatSeatTypes, SEAT_TYPE_META } from '../utils/formatters';
+import { quickReportSeating } from '../utils/store-api';
 import { useStore } from '../context/StoreContext';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { getGeolocationErrorMessage } from '../utils/errorHandler';
@@ -55,6 +56,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchInputResetKey, setSearchInputResetKey] = useState(0);
   const [selectedBrand, setSelectedBrand] = useState('all');
+  // 좌석 형태 필터. 활성화되면 해당 형태를 모두 갖춘(좌석 있음) 매장만 지도에 표시한다.
+  const [selectedSeatTypes, setSelectedSeatTypes] = useState<SeatType[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [pendingReportSelection, setPendingReportSelection] = useState<StoreSelectInfo | null>(null);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -174,6 +177,23 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     return '좌석: 확인 필요';
   }, []);
 
+  // 선택된 좌석 형태 필터를 매장이 만족하는지 검사한다. 필터가 비어있으면 항상 통과.
+  const matchesSeatTypeFilter = useCallback(
+    (store?: Store) => {
+      if (selectedSeatTypes.length === 0) return true;
+      if (!store || store.hasSeating !== 'yes') return false;
+      const storeSeatTypes = store.seatTypes ?? [];
+      return selectedSeatTypes.every((type) => storeSeatTypes.includes(type));
+    },
+    [selectedSeatTypes],
+  );
+
+  const toggleSeatTypeFilter = useCallback((type: SeatType) => {
+    setSelectedSeatTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    );
+  }, []);
+
   const buildInfoWindowContent = useCallback(
     (name: string, address: string, store?: Store) => {
       const seatSummary = store ? buildSeatSummary(store) : '좌석: 확인 필요';
@@ -183,9 +203,24 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         ? `${baseNotes} | 안내: 실제 매장명/상세 주소와 차이가 있을 수 있습니다.`
         : baseNotes;
 
+      const seatTypesText = store && store.hasSeating === 'yes' ? formatSeatTypes(store.seatTypes) : '';
+      const seatTypesHtml = seatTypesText
+        ? `<div style="margin-bottom:4px;color:#047857;font-size:11px;font-weight:600;">${seatTypesText}</div>`
+        : '';
+
       const buttonHtml = store && store.hasSeating !== 'unknown'
         ? `<button data-infowindow-action="edit" data-store-id="${store.id}" style="width:100%;padding:12px 16px;margin-top:10px;background-color:#f59e0b;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;">⚠️ 실제와 다른가요?</button>`
-        : `<button data-infowindow-action="add" style="width:100%;padding:12px 16px;margin-top:10px;background-color:#3b82f6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;">정보 추가하기</button>`;
+        : `<button data-infowindow-action="add" style="width:100%;padding:12px 16px;margin-top:10px;background-color:#3b82f6;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;">상세 제보하기</button>`;
+
+      // 원탭 간편 제보 버튼: 좌석 유무를 한 번에 제보한다.
+      const quickReportHtml = `
+        <div style="margin-top:10px;">
+          <div style="font-size:10px;color:#6b7280;margin-bottom:6px;text-align:center;">👆 한 번에 제보하기</div>
+          <div style="display:flex;gap:6px;">
+            <button data-infowindow-action="quick-yes" style="flex:1;padding:10px 8px;background-color:#059669;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;">🪑 좌석 있어요</button>
+            <button data-infowindow-action="quick-no" style="flex:1;padding:10px 8px;background-color:#dc2626;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;min-height:44px;">🚫 없어요</button>
+          </div>
+        </div>`;
 
       return `
         <div style="padding:8px;font-size:11px;line-height:1.5;width:260px;font-family:Arial,sans-serif;box-sizing:border-box;overflow:hidden;">
@@ -194,7 +229,9 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             ${address}
           </div>
           <div style="color:#d32f2f;font-weight:bold;margin-bottom:4px;">${seatSummary}</div>
+          ${seatTypesHtml}
           <div style="margin-top:4px;padding:6px;background-color:#f5f5f5;border-radius:3px;color:#333;word-wrap:break-word;overflow-wrap:break-word;font-size:10px;">${notes}</div>
+          ${quickReportHtml}
           ${buttonHtml}
         </div>
       `;
@@ -202,45 +239,105 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     [buildSeatSummary],
   );
 
-  const attachInfoWindowButtonListener = useCallback((matchedStore?: Store, place?: NearbyPlace) => {
-    setTimeout(() => {
-      const button = document.querySelector('[data-infowindow-action]') as HTMLButtonElement;
-      if (!button) return;
+  // 원탭 간편 제보 실행: 좌석 유무만 즉시 저장하고 지도/목록을 갱신한다.
+  const handleQuickReport = useCallback(
+    async (hasSeating: 'yes' | 'no', matchedStore?: Store, place?: NearbyPlace) => {
+      const selection: StoreSelectInfo | null = matchedStore
+        ? {
+            name: matchedStore.name,
+            address: matchedStore.address,
+            latitude: matchedStore.latitude,
+            longitude: matchedStore.longitude,
+          }
+        : place
+          ? { name: place.name, address: place.address, latitude: place.latitude, longitude: place.longitude }
+          : null;
 
-      button.addEventListener('click', () => {
-        const action = button.getAttribute('data-infowindow-action');
-        if (action === 'add') {
-          // 정보 추가 모드로 Sheet 열기
-          setActionType('add');
-          if (matchedStore && matchedStore.hasSeating === 'unknown') {
-            // store는 있지만 좌석 정보가 없는 경우: 기존 정보를 불러와서 수정
-            setSelectedStore(matchedStore);
-            setIsEditingStore(true);
-            setIsEditDialogOpen(true);
-          } else if (place) {
-            // store가 없는 경우: 새로운 정보 추가
-            setPendingReportSelection({
-              name: place.name,
-              address: place.address,
-              latitude: place.latitude,
-              longitude: place.longitude,
-            });
-            setIsEditDialogOpen(true);
-          } else {
-            setIsEditDialogOpen(true);
+      if (!selection) return;
+
+      try {
+        const saved = await quickReportSeating(selection, hasSeating, { existingStore: matchedStore });
+
+        // 내가 제보한 매장 목록에 추가 (수정/삭제 권한 부여)
+        try {
+          const reportedStores: string[] = JSON.parse(localStorage.getItem('reportedStores') || '[]');
+          if (Array.isArray(reportedStores) && !reportedStores.includes(saved.id)) {
+            reportedStores.push(saved.id);
+            localStorage.setItem('reportedStores', JSON.stringify(reportedStores));
           }
-        } else if (action === 'edit') {
-          // 정보 수정 모드로 Sheet 열기
-          setActionType('warning');
-          if (matchedStore) {
-            setSelectedStore(matchedStore);
-            setIsEditingStore(true);
-            setIsEditDialogOpen(true);
-          }
+        } catch {
+          // 로컬스토리지 저장 실패는 무시
         }
-      });
-    }, 50);
-  }, []);
+
+        activeInfoWindowRef.current?.close();
+        toast.success(
+          hasSeating === 'yes'
+            ? '🪑 좌석 있음으로 제보했어요. 감사합니다!'
+            : '🚫 좌석 없음으로 제보했어요. 감사합니다!',
+        );
+        await refreshStores();
+      } catch {
+        toast.error('제보 중 문제가 발생했습니다. 다시 시도해주세요.');
+      }
+    },
+    [refreshStores],
+  );
+
+  const attachInfoWindowButtonListener = useCallback(
+    (matchedStore?: Store, place?: NearbyPlace) => {
+      setTimeout(() => {
+        const buttons = document.querySelectorAll('[data-infowindow-action]');
+        if (!buttons.length) return;
+
+        buttons.forEach((el) => {
+          const button = el as HTMLButtonElement;
+          button.addEventListener('click', () => {
+            const action = button.getAttribute('data-infowindow-action');
+
+            if (action === 'quick-yes') {
+              void handleQuickReport('yes', matchedStore, place);
+              return;
+            }
+            if (action === 'quick-no') {
+              void handleQuickReport('no', matchedStore, place);
+              return;
+            }
+
+            if (action === 'add') {
+              // 상세 제보 Sheet 열기
+              setActionType('add');
+              if (matchedStore && matchedStore.hasSeating === 'unknown') {
+                // store는 있지만 좌석 정보가 없는 경우: 기존 정보를 불러와서 수정
+                setSelectedStore(matchedStore);
+                setIsEditingStore(true);
+                setIsEditDialogOpen(true);
+              } else if (place) {
+                // store가 없는 경우: 새로운 정보 추가
+                setPendingReportSelection({
+                  name: place.name,
+                  address: place.address,
+                  latitude: place.latitude,
+                  longitude: place.longitude,
+                });
+                setIsEditDialogOpen(true);
+              } else {
+                setIsEditDialogOpen(true);
+              }
+            } else if (action === 'edit') {
+              // 정보 수정 모드로 Sheet 열기
+              setActionType('warning');
+              if (matchedStore) {
+                setSelectedStore(matchedStore);
+                setIsEditingStore(true);
+                setIsEditDialogOpen(true);
+              }
+            }
+          });
+        });
+      }, 50);
+    },
+    [handleQuickReport],
+  );
 
   const refreshSearchInteraction = useCallback(() => {
     setIsSearching(false);
@@ -469,11 +566,17 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             }
           });
 
-          setNearbyPlaces(mergedPlaces);
+          // 좌석 형태 필터가 켜져 있으면, 매칭되는 매장이 조건을 만족하는 place만 남긴다.
+          const visiblePlaces =
+            selectedSeatTypes.length === 0
+              ? mergedPlaces
+              : mergedPlaces.filter((place) => matchesSeatTypeFilter(findBestMatchedStore(place)));
+
+          setNearbyPlaces(visiblePlaces);
 
           clearMarkers(placeMarkersRef.current);
 
-          mergedPlaces.forEach((place) => {
+          visiblePlaces.forEach((place) => {
             const marker = new window.kakao.maps.Marker({
               map: mapRef.current,
               position: new window.kakao.maps.LatLng(place.latitude, place.longitude),
@@ -511,7 +614,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
         searchOptions,
       );
     },
-    [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand],
+    [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, findBestMatchedStore, getOfflineMatches, isMapReady, normalizeText, selectedBrand, selectedSeatTypes, matchesSeatTypeFilter],
   );
 
   const moveToUserLocation = useCallback(() => {
@@ -752,6 +855,8 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
     stores.forEach((store) => {
       if (!store.latitude || !store.longitude) return;
+      // 좌석 형태 필터가 켜져 있으면 조건을 만족하는 매장만 마커로 표시
+      if (!matchesSeatTypeFilter(store)) return;
 
       const marker = new window.kakao.maps.Marker({
         map: mapRef.current,
@@ -775,7 +880,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
       reportMarkersRef.current.push(marker);
     });
-  }, [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, isMapReady, stores]);
+  }, [attachInfoWindowButtonListener, buildInfoWindowContent, clearMarkers, isMapReady, stores, matchesSeatTypeFilter]);
 
   // selectedStore가 업데이트되면 infowindow도 자동으로 갱신
   useEffect(() => {
@@ -799,7 +904,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
   useEffect(() => {
     if (!isMapReady) return;
     searchConvenienceStores(keyword);
-  }, [isMapReady, keyword, searchConvenienceStores, selectedBrand]);
+  }, [isMapReady, keyword, searchConvenienceStores, selectedBrand, selectedSeatTypes]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -912,6 +1017,39 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           </Button>
         </div>
 
+        {/* 좌석 형태 필터 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-600">좌석 형태</span>
+          {SEAT_TYPE_VALUES.map((type) => {
+            const meta = SEAT_TYPE_META[type];
+            const active = selectedSeatTypes.includes(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => toggleSeatTypeFilter(type)}
+                aria-pressed={active}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                    : 'border-white/60 bg-white/70 text-slate-600 hover:border-emerald-300 hover:text-emerald-700'
+                }`}
+              >
+                {meta.emoji} {meta.label}
+              </button>
+            );
+          })}
+          {selectedSeatTypes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedSeatTypes([])}
+              className="rounded-full px-2 py-1 text-xs text-slate-400 hover:text-slate-600"
+            >
+              초기화
+            </button>
+          )}
+        </div>
+
         {nearbyPlaces.length > 0 && (
           <div className="text-sm text-gray-600">
             전체 검색 결과 {nearbyPlaces.length}개. 목록에서 선택해 해당 위치로 이동하거나 핀을 클릭해 확인하세요.
@@ -926,7 +1064,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
             <div className="text-xs text-slate-500">클릭해서 위치를 선택할 수 있습니다</div>
           </div>
           <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
-            {isMapReady ? '실시간 지도' : '불러오는 중'}
+            {isMapReady ? '지도 준비됨' : '불러오는 중'}
           </div>
         </div>
 

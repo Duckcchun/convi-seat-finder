@@ -3,8 +3,10 @@ import { StoreItem } from './StoreItem';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { RefreshCw, Search, X, List } from 'lucide-react';
-import { Store } from '../types/store';
+import { Switch } from './ui/switch';
+import { RefreshCw, Search, X, List, HelpCircle } from 'lucide-react';
+import { Store, SeatType, SEAT_TYPE_VALUES } from '../types/store';
+import { SEAT_TYPE_META } from '../utils/formatters';
 
 interface ConvenienceStoreListProps {
   stores: Store[];
@@ -23,13 +25,17 @@ export function ConvenienceStoreList({
 }: ConvenienceStoreListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('all');
+  // 좌석 형태 필터. 선택된 형태가 하나라도 있으면 "좌석 있음 + 해당 형태 포함" 매장만 노출한다.
+  const [selectedSeatTypes, setSelectedSeatTypes] = useState<SeatType[]>([]);
+  // 좌석 정보가 확인된 매장(있음/없음)만 보기. 콜드스타트 시 물음표(unknown) 매장을 숨겨 첫인상을 개선한다.
+  const [hideUnknown, setHideUnknown] = useState(false);
   const [filteredStores, setFilteredStores] = useState(stores);
   const [displayedItemsCount, setDisplayedItemsCount] = useState(ITEMS_PER_PAGE);
   const observerTarget = useRef<HTMLDivElement>(null);
   const brandOptions = ['all', 'CU', 'GS25', '세븐일레븐', '이마트24', '미니스톱', '씨스페이스'];
 
   const filterStores = useCallback(
-    (query: string, brand: string) => {
+    (query: string, brand: string, seatTypes: SeatType[], onlyConfirmed: boolean) => {
       const normalizedQuery = query.trim().toLowerCase();
 
       return stores.filter((store) => {
@@ -37,6 +43,19 @@ export function ConvenienceStoreList({
 
         if (brand !== 'all' && !store.name.includes(brand)) {
           return false;
+        }
+
+        // 좌석 정보 미확인(unknown) 매장 숨기기
+        if (onlyConfirmed && store.hasSeating === 'unknown') {
+          return false;
+        }
+
+        // 좌석 형태 필터: 선택된 형태를 모두 만족(AND)하는 매장만 남긴다.
+        if (seatTypes.length > 0) {
+          if (store.hasSeating !== 'yes') return false;
+          const storeSeatTypes = store.seatTypes ?? [];
+          const matchesAll = seatTypes.every((type) => storeSeatTypes.includes(type));
+          if (!matchesAll) return false;
         }
 
         if (!normalizedQuery) {
@@ -52,27 +71,34 @@ export function ConvenienceStoreList({
     [stores],
   );
 
+  const toggleSeatTypeFilter = useCallback((type: SeatType) => {
+    setDisplayedItemsCount(ITEMS_PER_PAGE);
+    setSelectedSeatTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+    );
+  }, []);
+
   // 검색 기능
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     setDisplayedItemsCount(ITEMS_PER_PAGE); // 검색 시 초기값으로 리셋
-    setFilteredStores(filterStores(query, selectedBrand));
-  }, [filterStores, selectedBrand]);
+    setFilteredStores(filterStores(query, selectedBrand, selectedSeatTypes, hideUnknown));
+  }, [filterStores, selectedBrand, selectedSeatTypes, hideUnknown]);
 
   const handleClear = useCallback(() => {
     setSearchQuery('');
     setDisplayedItemsCount(ITEMS_PER_PAGE);
-    setFilteredStores(filterStores('', selectedBrand));
-  }, [filterStores, selectedBrand]);
+    setFilteredStores(filterStores('', selectedBrand, selectedSeatTypes, hideUnknown));
+  }, [filterStores, selectedBrand, selectedSeatTypes, hideUnknown]);
 
-  // stores가 변경될 때마다 필터링된 목록만 업데이트
+  // stores/필터가 변경될 때마다 필터링된 목록만 업데이트
   useEffect(() => {
-    setFilteredStores(filterStores(searchQuery, selectedBrand));
-  }, [filterStores, searchQuery, selectedBrand]);
+    setFilteredStores(filterStores(searchQuery, selectedBrand, selectedSeatTypes, hideUnknown));
+  }, [filterStores, searchQuery, selectedBrand, selectedSeatTypes, hideUnknown]);
 
   useEffect(() => {
     setDisplayedItemsCount(ITEMS_PER_PAGE);
-  }, [selectedBrand]);
+  }, [selectedBrand, hideUnknown]);
 
   // 검색어 변경 시에만 표시 개수를 초기화
   useEffect(() => {
@@ -106,10 +132,14 @@ export function ConvenienceStoreList({
   }, [displayedItemsCount, filteredStores.length]);
 
   const displayedStores = filteredStores.slice(0, displayedItemsCount);
-  const hasSeatingCount = displayedStores.filter(store => store.hasSeating === 'yes').length;
-  const noSeatingCount = displayedStores.filter(store => store.hasSeating === 'no').length;
-  const unknownCount = displayedStores.filter(store => store.hasSeating === 'unknown').length;
+  // 통계는 화면 표시분이 아니라 필터된 전체 결과 기준으로 집계한다.
+  const hasSeatingCount = filteredStores.filter(store => store.hasSeating === 'yes').length;
+  const noSeatingCount = filteredStores.filter(store => store.hasSeating === 'no').length;
+  const unknownCount = filteredStores.filter(store => store.hasSeating === 'unknown').length;
   const hasMoreItems = displayedItemsCount < filteredStores.length;
+  // 전체 매장 중 좌석 정보가 확인된(있음/없음) 비율 — 콜드스타트 안내에 사용
+  const confirmedCount = stores.filter(store => store.hasSeating !== 'unknown').length;
+  const noConfirmedData = confirmedCount === 0 && stores.length > 0;
 
   return (
     <Card className="w-full gap-4">
@@ -171,6 +201,64 @@ export function ConvenienceStoreList({
           ))}
         </div>
 
+        {/* 좌석 형태 필터 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-500">좌석 형태</span>
+          {SEAT_TYPE_VALUES.map((type) => {
+            const meta = SEAT_TYPE_META[type];
+            const active = selectedSeatTypes.includes(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => toggleSeatTypeFilter(type)}
+                aria-pressed={active}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                    : 'border-slate-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
+                }`}
+              >
+                {meta.emoji} {meta.label}
+              </button>
+            );
+          })}
+          {selectedSeatTypes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSeatTypes([]);
+                setDisplayedItemsCount(ITEMS_PER_PAGE);
+              }}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-3 w-3" /> 형태 초기화
+            </button>
+          )}
+        </div>
+
+        {/* 정보 있는 매장만 보기 토글 */}
+        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 shrink-0 text-slate-400" />
+            <div className="leading-tight">
+              <p className="text-sm font-medium text-slate-700">정보 있는 매장만 보기</p>
+              <p className="text-xs text-slate-500">좌석 정보가 아직 없는 매장을 숨깁니다</p>
+            </div>
+          </div>
+          <Switch checked={hideUnknown} onCheckedChange={setHideUnknown} aria-label="정보 있는 매장만 보기" />
+        </div>
+
+        {/* 콜드스타트 안내: 확인된 좌석 정보가 하나도 없을 때 */}
+        {noConfirmedData && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-sm font-medium text-blue-900">아직 이 지역의 좌석 정보가 부족해요</p>
+            <p className="mt-1 text-xs text-blue-700">
+              등록된 편의점 위치는 있지만 좌석 정보는 아직 확인되지 않았어요. 지도에서 편의점을 눌러 첫 제보자가 되어주세요!
+            </p>
+          </div>
+        )}
+
         {/* 통계 정보 */}
         <div className="flex flex-wrap gap-y-2 text-xs" style={{ gap: '0 0.35rem' }}>
           <div className="px-3 py-1 bg-gray-100 rounded-full whitespace-nowrap">
@@ -183,7 +271,7 @@ export function ConvenienceStoreList({
             좌석 없음: {noSeatingCount}개
           </div>
           <div className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full whitespace-nowrap">
-            정보 부족: {unknownCount}개
+            미확인: {unknownCount}개
           </div>
         </div>
 
@@ -205,6 +293,17 @@ export function ConvenienceStoreList({
                   onClick={handleClear}
                 >
                   검색 초기화
+                </Button>
+              </div>
+            ) : hideUnknown ? (
+              <div className="space-y-3">
+                <HelpCircle className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="text-gray-500">좌석 정보가 확인된 매장이 아직 없어요.</p>
+                <p className="text-sm text-gray-400">
+                  지도에서 편의점을 눌러 좌석 정보를 제보하면 여기에 표시됩니다.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setHideUnknown(false)}>
+                  미확인 매장도 보기
                 </Button>
               </div>
             ) : (

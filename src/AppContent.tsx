@@ -44,7 +44,7 @@ export function AppContent() {
                 </h1>
               </div>
                <p className="text-sm text-slate-600 pl-20">
-                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;주변 편의점 좌석 현황을 먼저 확인하고, 제보하세요.
+                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;주변 편의점 좌석 유무와 형태를 먼저 확인하고, 제보하세요.
                </p>
             </div>
 
