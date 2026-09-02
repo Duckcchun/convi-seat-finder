@@ -1,4 +1,37 @@
-import { Store } from '../types/store';
+import { Store, SeatType } from '../types/store';
+
+/**
+ * 좌석 형태 표시 정보 (라벨 + 이모지).
+ * 지도 앱이 제공하지 않는 정형화된 좌석 형태 정보로, 본 서비스의 핵심 차별 데이터다.
+ */
+export const SEAT_TYPE_META: Record<SeatType, { label: string; emoji: string }> = {
+  bar: { label: '바 테이블', emoji: '🪑' },
+  table: { label: '일반 테이블', emoji: '🍽️' },
+  parasol: { label: '야외 파라솔', emoji: '⛱️' },
+  standing: { label: '스탠딩', emoji: '🧍' },
+};
+
+/**
+ * 좌석 형태 목록을 한글 라벨 배열로 변환
+ */
+export const getSeatTypeLabels = (seatTypes: SeatType[] | undefined): string[] => {
+  if (!seatTypes || seatTypes.length === 0) return [];
+  return seatTypes.map((type) => SEAT_TYPE_META[type]?.label).filter(Boolean);
+};
+
+/**
+ * 좌석 형태 목록을 "🪑 바 테이블 · 🍽️ 일반 테이블" 형태의 요약 문자열로 변환
+ */
+export const formatSeatTypes = (seatTypes: SeatType[] | undefined): string => {
+  if (!seatTypes || seatTypes.length === 0) return '';
+  return seatTypes
+    .map((type) => {
+      const meta = SEAT_TYPE_META[type];
+      return meta ? `${meta.emoji} ${meta.label}` : '';
+    })
+    .filter(Boolean)
+    .join(' · ');
+};
 
 /**
  * 날짜 문자열을 한국 형식으로 포매팅
