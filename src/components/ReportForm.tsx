@@ -7,7 +7,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 import { createStore, updateStore } from '../utils/store-api';
-import type { StoreFormData, StoreSelectInfo, Store } from '../types/store';
+import type { StoreFormData, StoreSelectInfo, Store, SeatType } from '../types/store';
+import { SEAT_TYPE_VALUES } from '../types/store';
+import { SEAT_TYPE_META } from '../utils/formatters';
 import { MapPin, User, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { getErrorMessage } from '../utils/errorHandler';
@@ -128,6 +130,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       name: '',
       address: '',
       hasSeating: 'unknown',
+      seatTypes: [],
       reporterName: '',
       notes: '',
       latitude: undefined,
@@ -148,11 +151,37 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
       if ('hasSeating' in initialData) {
         setValue('hasSeating', initialData.hasSeating);
       }
+      if ('seatTypes' in initialData && Array.isArray(initialData.seatTypes)) {
+        setValue('seatTypes', initialData.seatTypes);
+      }
       if ('notes' in initialData && initialData.notes) {
         setValue('notes', initialData.notes);
       }
     }
   }, [initialData, setValue, storeId]);
+
+  // 좌석 형태 다중 선택 토글
+  const toggleSeatType = useCallback(
+    (type: SeatType) => {
+      const current = watch('seatTypes') ?? [];
+      const next = current.includes(type)
+        ? current.filter((t) => t !== type)
+        : [...current, type];
+      setValue('seatTypes', next, { shouldValidate: true });
+    },
+    [setValue, watch],
+  );
+
+  // 좌석 여부 변경 시, '있음'이 아니면 선택된 좌석 형태를 비운다.
+  const handleSeatingChange = useCallback(
+    (value: StoreFormData['hasSeating']) => {
+      setValue('hasSeating', value);
+      if (value !== 'yes') {
+        setValue('seatTypes', []);
+      }
+    },
+    [setValue],
+  );
 
   const handleStoreSearchSelect = useCallback((storeInfo: StoreSelectInfo) => {
     setValue('name', storeInfo.name);
@@ -224,6 +253,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
           name: payload.name.trim(),
           address: payload.address.trim(),
           hasSeating: payload.hasSeating,
+          seatTypes: payload.hasSeating === 'yes' ? payload.seatTypes ?? [] : [],
           reportedBy: payload.reporterName?.trim() || undefined,
           notes: payload.notes?.trim() || undefined,
           latitude: payload.latitude,
@@ -258,6 +288,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
         name: '',
         address: '',
         hasSeating: 'unknown',
+        seatTypes: [],
         reporterName: '',
         notes: '',
         latitude: undefined,
@@ -359,7 +390,7 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
                   key={option.id}
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => setValue('hasSeating', option.id)}
+                  onClick={() => handleSeatingChange(option.id)}
                   aria-pressed={isSelected}
                   className={`flex min-h-16 w-full items-center rounded-lg border-2 gap-2.5 px-3 py-2 text-left transition-colors duration-200 ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                   style={{
@@ -402,6 +433,49 @@ export function ReportForm({ onSuccess, initialData, storeId, actionType = 'add'
           </div>
           {errors.hasSeating && <p className="mt-2 text-sm text-red-600">{errors.hasSeating.message}</p>}
         </div>
+
+        {/* 좌석 형태 (좌석 있음일 때만 노출) */}
+        {formValues.hasSeating === 'yes' && (
+          <div className="mt-4">
+            <Label className="mb-1 block text-sm font-medium">
+              좌석 형태 <span className="text-xs font-normal text-gray-500">(해당하는 것을 모두 선택)</span>
+            </Label>
+            <p className="mb-2.5 text-xs text-gray-500">
+              지도 앱에서는 알 수 없는 정보예요. 형태를 알려주면 다른 사람에게 큰 도움이 됩니다.
+            </p>
+            <div className="grid grid-cols-2 gap-2.5" role="group" aria-label="좌석 형태">
+              {SEAT_TYPE_VALUES.map((type) => {
+                const meta = SEAT_TYPE_META[type];
+                const selected = (formValues.seatTypes ?? []).includes(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => toggleSeatType(type)}
+                    aria-pressed={selected}
+                    className={`flex min-h-14 items-center gap-2.5 rounded-lg border-2 px-3 py-2 text-left transition-colors duration-200 ${
+                      selected
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    } ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  >
+                    <span className="text-xl leading-none">{meta.emoji}</span>
+                    <span
+                      className={`text-sm font-medium ${
+                        selected ? 'text-emerald-800' : 'text-gray-700'
+                      }`}
+                    >
+                      {meta.label}
+                    </span>
+                    {selected && <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-emerald-600" />}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.seatTypes && <p className="mt-2 text-sm text-red-600">{errors.seatTypes.message as string}</p>}
+          </div>
+        )}
       </div>
 
       {/* 추가 정보 */}

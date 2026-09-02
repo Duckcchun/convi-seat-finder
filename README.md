@@ -1,6 +1,6 @@
 
 # 🏪 편의점 좌석 찾기 (Convi Seat Finder)
-> 편의점 좌석의 실시간 상태를 확인하고 다른 사용자를 위해 제보할 수 있는 웹 애플리케이션
+> 편의점 좌석 유무와 좌석 형태(바 테이블·일반 테이블·야외 파라솔)를 확인하고 다른 사용자를 위해 제보할 수 있는 웹 애플리케이션
 
 **[🔗 Demo 바로가기](https://duckcchun.github.io/convi-seat-finder/)**
 
@@ -18,8 +18,8 @@
 - **Framework:** React 18.3.1 + Vite 6.x
 - **Styling:** Tailwind CSS + Radix UI (shadcn/ui)
 - **UI Components:** Radix UI v1.x, Lucide Icons
-- **Forms:** React Hook Form 7.x + Zod (스키마 검증)
-- **Database / Realtime:** Supabase (PostgREST API + Realtime)
+- **Forms:** React Hook Form 7.x (커스텀 검증 유틸)
+- **Database / Realtime:** Supabase (PostgREST API + Realtime, 원격 설정 시)
 - **Maps:** Kakao Maps API
 - **Notifications:** Sonner (Toast)
 - **Testing:** Vitest + @testing-library/react (jsdom)
@@ -30,9 +30,11 @@
 <br>
 
 ## ✨ 주요 기능
-- **실시간 좌석 상태 조회:** Supabase의 Realtime 기능을 활용해 여러 사용자가 동시에 보아도 좌석 정보가 실시간으로 동기화됩니다.
-- **사용자 제보 기능:** 사용자가 직접 좌석 상태(있음/없음)를 변경하여 최신 정보로 업데이트할 수 있습니다.
-- **반응형 UI:** Radix UI를 기반으로 한 컴포넌트를 사용하여 데스크톱과 모바일 환경 모두에서 최적의 사용성을 제공합니다.
+- **좌석 형태 분류:** 좌석 유무를 넘어 좌석 형태(바 테이블·일반 테이블·야외 파라솔·스탠딩)까지 구조화해 제공합니다. 일반 지도 앱이 정형화해서 주지 않는 정보로, 본 서비스의 핵심 차별점입니다.
+- **좌석 형태 필터:** 원하는 좌석 형태를 선택하면 지도와 목록이 해당 조건을 만족하는 매장만 보여줍니다.
+- **간편 제보:** 지도/검색으로 편의점을 고르고 좌석 유무·형태를 선택해 빠르게 제보합니다. 좌석이 있을 때만 형태 선택이 노출되어 입력 부담을 줄였습니다.
+- **데이터 동기화:** Supabase(PostgREST + Realtime)를 통한 다중 사용자 동기화를 지원하며, 원격 설정이 없으면 로컬 저장소 기반으로 동작합니다.
+- **반응형 UI:** Radix UI 기반 컴포넌트로 데스크톱과 모바일 환경 모두에서 최적의 사용성을 제공합니다.
 
 ---
 <br>
@@ -154,11 +156,12 @@ VITE_ENABLE_SUPABASE_REMOTE="false"
 
 ## 📈 앞으로의 계획 (Roadmap)
 
-- [x] **지도 기반 서비스:** Kakao Maps API를 활용한 실시간 위치 기반 편의점 표시
-- [x] **실시간 데이터 동기화:** Supabase Realtime을 통한 다중 사용자 동시 업데이트
+- [x] **지도 기반 서비스:** Kakao Maps API를 활용한 위치 기반 편의점 표시
+- [x] **좌석 형태 분류/필터:** 좌석 형태(바·테이블·파라솔·스탠딩) 제보 및 필터링
+- [x] **데이터 동기화:** Supabase Realtime 기반 다중 사용자 동기화 (원격 설정 시)
 - [x] **반응형 UI:** 모바일/태블릿/데스크톱 모두 최적화된 UI
 - [x] **전역 상태 관리:** React Context API로 Props drilling 제거
-- [x] **폼 검증:** Zod + react-hook-form으로 실시간 검증 및 에러 처리
+- [x] **폼 검증:** react-hook-form 기반 실시간 입력 검증 및 에러 처리
 - [x] **에러 경계 처리:** Error Boundary 컴포넌트로 렌더링 에러 캐치
 - [x] **테스트 코드:** Vitest 유닛 테스트 (formatters, validation, components)
 - [ ] **사용자 인증:** GitHub/Google 소셜 로그인 도입으로 제보자 신뢰도 향상
@@ -214,18 +217,19 @@ npm run test:coverage
 ## 📸 주요 기능 미리보기
 
 ### 지도 기반 편의점 검색
-- 실시간 위치 기반 편의점 표시
+- 위치 기반 주변 편의점 표시 (Kakao Maps)
+- 좌석 형태 필터로 원하는 조건의 매장만 보기
 - 편의점 선택으로 빠른 정보 제보
 
 ### 편의점 좌석 정보 조회
-- 실시간 좌석 상태 확인
-- 사용자별 제보 이력 및 신뢰도 점수
+- 좌석 유무 및 좌석 형태 뱃지 확인
+- 최근 업데이트 시각과 제보자 표시
 
 ### 제보 플로우
 1. 지도 또는 검색으로 편의점 선택
-2. 좌석 상태 선택 (있음/없음/미확인)
-3. 추가 정보 입력 (좌석 형태, 비고사항)
-4. 제보 완료 후 실시간 업데이트
+2. 좌석 유무 선택 (있음/없음/미확인)
+3. 좌석이 있으면 좌석 형태 선택 (바 테이블·일반 테이블·야외 파라솔·스탠딩, 복수 선택 가능)
+4. 제보 완료 후 목록/지도에 반영
 
 -----
 

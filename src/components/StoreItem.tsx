@@ -7,7 +7,7 @@ import { MapPin, Clock, User, Trash2, MessageSquare, Edit2, AlertCircle } from '
 import { toast } from 'sonner';
 import { Store } from '../types/store';
 import { deleteStore } from '../utils/store-api';
-import { formatDate, formatNotes, getSeatingBadgeStyle, getSeatingStatusText } from '../utils/formatters';
+import { formatDate, formatNotes, getSeatingBadgeStyle, getSeatingStatusText, SEAT_TYPE_META } from '../utils/formatters';
 import { ReportForm } from './ReportForm';
 import { useStore } from '../context/StoreContext';
 
@@ -76,7 +76,7 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
 
   return (
     <>
-      <Card className="hover:shadow-md transition-shadow">
+      <Card className={`transition-shadow hover:shadow-md ${store.hasSeating === 'unknown' ? 'border-dashed bg-slate-50/50' : ''}`}>
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
@@ -122,6 +122,25 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                 </div>
               </div>
 
+              {/* 좌석 형태 뱃지 */}
+              {store.hasSeating === 'yes' && store.seatTypes && store.seatTypes.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {store.seatTypes.map((type) => {
+                    const meta = SEAT_TYPE_META[type];
+                    if (!meta) return null;
+                    return (
+                      <Badge
+                        key={type}
+                        variant="outline"
+                        className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                      >
+                        {meta.emoji} {meta.label}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* 시간 + 제보자 */}
               <div className="flex items-center text-xs text-gray-500 mb-3">
                 <div className="flex items-center flex-1">
@@ -136,14 +155,29 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                 )}
               </div>
 
-              {/* 설명 */}
-              {store.notes && (
-                <div className="rounded bg-gray-50 p-2.5 text-sm">
-                  <div className="flex items-start">
-                    <MessageSquare className="h-3 w-3 mr-1.5 mt-0.5 text-gray-400 shrink-0" />
-                    <span className="text-gray-700">{formatNotes(store.notes, store.hasSeating)}</span>
+              {/* 설명 / 미확인 안내 */}
+              {store.hasSeating === 'unknown' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionType('edit');
+                    setIsEditingStore(true);
+                    setIsEditDialogOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-2.5 text-left text-sm text-blue-700 transition-colors hover:bg-blue-50"
+                >
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>좌석 정보가 아직 없어요. 눌러서 제보해주세요</span>
+                </button>
+              ) : (
+                store.notes && (
+                  <div className="rounded bg-gray-50 p-2.5 text-sm">
+                    <div className="flex items-start">
+                      <MessageSquare className="h-3 w-3 mr-1.5 mt-0.5 text-gray-400 shrink-0" />
+                      <span className="text-gray-700">{formatNotes(store.notes, store.hasSeating)}</span>
+                    </div>
                   </div>
-                </div>
+                )
               )}
             </div>
           </div>
@@ -151,7 +185,7 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
       </Card>
 
       {/* 편의점 정보 수정 Sheet */}
-      <Sheet open={isEditDialogOpen} onOpenChange={(open) => {
+      <Sheet open={isEditDialogOpen} onOpenChange={(open: boolean) => {
         setIsEditDialogOpen(open);
         if (!open) {
           setIsEditingStore(false);
@@ -252,6 +286,22 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                                 ? '앉아서 취식할 수 있습니다'
                                 : '서서 취식만 가능합니다'}
                             </p>
+                            {store.hasSeating === 'yes' && store.seatTypes && store.seatTypes.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {store.seatTypes.map((type) => {
+                                  const meta = SEAT_TYPE_META[type];
+                                  if (!meta) return null;
+                                  return (
+                                    <Badge
+                                      key={type}
+                                      className="bg-white text-emerald-700 border border-emerald-300 hover:bg-white"
+                                    >
+                                      {meta.emoji} {meta.label}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CardContent>
