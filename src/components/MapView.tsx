@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Store, StoreSelectInfo, SEAT_TYPE_VALUES, BRAND_OPTIONS } from '../types/store';
-import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
+import { MapPin, Navigation, RefreshCw, Search, Edit2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
-import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import { ReportForm } from './ReportForm';
-import { getSeatingBadgeClass, getSeatingStatusText, formatDate, formatSeatTypes, SEAT_TYPE_META } from '../utils/formatters';
+import { StoreDetailContent } from './StoreDetailContent';
+import { getSeatingBadgeClass, getSeatingStatusText, formatSeatTypes, SEAT_TYPE_META } from '../utils/formatters';
 import { quickReportSeating } from '../utils/store-api';
 import { useStore } from '../context/StoreContext';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
@@ -472,8 +472,6 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
     });
     return kakaoSdkLoadPromise;
   }, [resolveKakaoApiKey]);
-
-  const brandOptions = useMemo(() => BRAND_OPTIONS, []);
 
   const hasSearchQuery = keyword.trim().length > 0;
   const hasNearbyResults = hasSearchQuery && nearbyPlaces.length > 0;
@@ -1042,7 +1040,7 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
 
           {/* 브랜드 필터 (가로 스크롤) */}
           <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {brandOptions.map((brand) => (
+            {BRAND_OPTIONS.map((brand) => (
               <button
                 key={brand}
                 type="button"
@@ -1186,12 +1184,12 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
           ) : selectedStore ? (
             <>
               {/* 헤더 */}
-              <div className="mb-6 pb-4 border-b border-slate-200">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedStore.name}</h2>
-                    <div className="flex items-center text-gray-600 text-sm mt-2 gap-1">
-                      <MapPin className="h-4 w-4 text-blue-600" />
+              <div className="mb-6 border-b border-border pb-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-bold text-foreground">{selectedStore.name}</h2>
+                    <div className="mt-2 flex items-start gap-1 text-sm text-muted-foreground">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                       <p className="line-clamp-2">{selectedStore.address}</p>
                     </div>
                   </div>
@@ -1204,102 +1202,15 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
               </div>
 
               <div className="space-y-4 pb-6">
-                {/* 좌석 상태 경고/확인 배너 */}
-                {selectedStore.hasSeating === 'unknown' ? (
-                  <Card className="border-l-4 border-l-red-500 bg-red-50">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">❓</div>
-                        <div>
-                          <h3 className="font-semibold text-red-900">좌석 정보 미확인</h3>
-                          <p className="text-sm text-red-700 mt-1">정확한 좌석 정보를 입력해주세요</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card className={`border-l-4 ${
-                    selectedStore.hasSeating === 'yes'
-                      ? 'border-l-green-500 bg-green-50'
-                      : 'border-l-red-500 bg-red-50'
-                  }`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">
-                          {selectedStore.hasSeating === 'yes' ? '✅' : '❌'}
-                        </div>
-                        <div>
-                          <h3 className={`font-semibold ${
-                            selectedStore.hasSeating === 'yes'
-                              ? 'text-green-900'
-                              : 'text-red-900'
-                          }`}>
-                            {selectedStore.hasSeating === 'yes'
-                              ? '좌석이 있습니다'
-                              : '좌석이 없습니다'}
-                          </h3>
-                          <p className={`text-sm mt-1 ${
-                            selectedStore.hasSeating === 'yes'
-                              ? 'text-green-700'
-                              : 'text-red-700'
-                          }`}>
-                            {selectedStore.hasSeating === 'yes'
-                              ? '앉아서 취식할 수 있습니다'
-                              : '서서 취식만 가능합니다'}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* 최근 업데이트 */}
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <Clock className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
-                        <div>
-                          <p className="text-xs text-gray-500">최근 업데이트</p>
-                          <p className="font-semibold text-gray-900">{formatDate(selectedStore.lastUpdated)}</p>
-                        </div>
-                      </div>
-                      {selectedStore.reportedBy && (
-                        <div className="flex items-start gap-3 pt-2 border-t border-gray-100">
-                          <User className="h-5 w-5 text-gray-400 mt-1 shrink-0" />
-                          <div>
-                            <p className="text-xs text-gray-500">제보자</p>
-                            <p className="font-semibold text-gray-900">{selectedStore.reportedBy}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* 상세 정보 */}
-                {selectedStore.notes ? (
-                  <Card>
-                    <CardContent className="p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">상세 정보</h3>
-                      <p className="text-sm text-gray-700 leading-relaxed">{selectedStore.notes}</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card className="bg-gray-50">
-                    <CardContent className="p-4 text-center">
-                      <p className="text-sm text-gray-500">좌석 형태/비고 정보가 아직 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                )}
+                <StoreDetailContent store={selectedStore} />
 
                 {/* 버튼 섹션 */}
                 <div className="mt-6">
                   <Button
-                    className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-base"
+                    className="h-12 w-full rounded-xl text-base font-semibold"
                     onClick={() => setIsEditingStore(true)}
                   >
-                    <Edit2 className="h-5 w-5 mr-2" />
+                    <Edit2 className="mr-2 h-5 w-5" />
                     정보 수정하기
                   </Button>
                 </div>

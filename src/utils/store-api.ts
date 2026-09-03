@@ -1,10 +1,4 @@
 // REMOTE_ENABLED 상태 및 환경변수, 호스트명 로그 (앱 실행 시 자동 출력)
-try {
-  // @ts-ignore
-  console.log('[REMOTE_ENABLED]', REMOTE_ENABLED, 'VITE_ENABLE_SUPABASE_REMOTE:', import.meta.env.VITE_ENABLE_SUPABASE_REMOTE, 'IS_LOCALHOST:', IS_LOCALHOST, 'HAS_REMOTE_CONFIG:', HAS_REMOTE_CONFIG, 'hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A');
-} catch (e) {
-  // import.meta.env 접근 불가 환경(런타임 콘솔 등)에서는 무시
-}
 import { projectId, publicAnonKey } from "./supabase/info";
 import { Store, StoreFormData, SeatType, SEAT_TYPE_VALUES, StoreSelectInfo } from "../types/store";
 import offlineSeedStores from "../data/offline-stores.json";
@@ -94,7 +88,7 @@ function normalizeStore(raw: Partial<Store> & Record<string, unknown>): Store {
 
   const lastUpdated = raw.lastUpdated || raw.last_updated;
   const reportedBy = raw.reportedBy || raw.reported_by;
-  const notes = raw.notes || raw.notes;  // snake_case와 camelCase 모두 지원
+  const notes = raw.notes;  // notes는 snake/camel 모두 동일 필드명
   const rawSeatTypes = (raw as Record<string, unknown>).seatTypes ?? (raw as Record<string, unknown>).seat_types;
 
   // 좌석 없음/모름인데 형태가 들어온 경우는 무시한다(데이터 정합성).

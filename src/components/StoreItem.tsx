@@ -9,6 +9,7 @@ import { Store } from '../types/store';
 import { deleteStore } from '../utils/store-api';
 import { formatDate, formatNotes, getSeatingBadgeClass, getSeatingStatusText, SEAT_TYPE_META } from '../utils/formatters';
 import { ReportForm } from './ReportForm';
+import { StoreDetailContent } from './StoreDetailContent';
 import { useStore } from '../context/StoreContext';
 
 interface StoreItemProps {
@@ -231,112 +232,7 @@ export function StoreItem({ store, onDelete }: StoreItemProps) {
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {/* 좌석 상태 */}
-                  {store.hasSeating === 'unknown' ? (
-                    <Card className="border-l-4 border-l-red-500 bg-red-50">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="text-2xl">❓</div>
-                          <div>
-                            <h3 className="font-semibold text-red-900">좌석 정보 미확인</h3>
-                            <p className="text-sm text-red-700 mt-1">정확한 좌석 정보를 입력해주세요</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className={`border-l-4 ${
-                      store.hasSeating === 'yes'
-                        ? 'border-l-green-500 bg-green-50'
-                        : 'border-l-red-500 bg-red-50'
-                    }`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="text-2xl">
-                            {store.hasSeating === 'yes' ? '✅' : '❌'}
-                          </div>
-                          <div>
-                            <h3 className={`font-semibold ${
-                              store.hasSeating === 'yes'
-                                ? 'text-green-900'
-                                : 'text-red-900'
-                            }`}>
-                              {store.hasSeating === 'yes'
-                                ? '좌석이 있습니다'
-                                : '좌석이 없습니다'}
-                            </h3>
-                            <p className={`text-sm mt-1 ${
-                              store.hasSeating === 'yes'
-                                ? 'text-green-700'
-                                : 'text-red-700'
-                            }`}>
-                              {store.hasSeating === 'yes'
-                                ? '앉아서 취식할 수 있습니다'
-                                : '서서 취식만 가능합니다'}
-                            </p>
-                            {store.hasSeating === 'yes' && store.seatTypes && store.seatTypes.length > 0 && (
-                              <div className="mt-3 flex flex-wrap gap-1.5">
-                                {store.seatTypes.map((type) => {
-                                  const meta = SEAT_TYPE_META[type];
-                                  if (!meta) return null;
-                                  return (
-                                    <Badge
-                                      key={type}
-                                      className="bg-white text-emerald-700 border border-emerald-300 hover:bg-white"
-                                    >
-                                      {meta.emoji} {meta.label}
-                                    </Badge>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* 최근 업데이트 */}
-                  <Card className="rounded-2xl border-border/70">
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Clock className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">최근 업데이트</p>
-                            <p className="font-semibold text-foreground">{formatDate(store.lastUpdated)}</p>
-                          </div>
-                        </div>
-                        {store.reportedBy && (
-                          <div className="flex items-start gap-3 border-t border-border pt-2">
-                            <User className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-                            <div>
-                              <p className="text-xs text-muted-foreground">제보자</p>
-                              <p className="font-semibold text-foreground">{store.reportedBy}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* 상세 정보 */}
-                  {store.notes ? (
-                    <Card className="rounded-2xl border-border/70">
-                      <CardContent className="p-4">
-                        <h3 className="mb-3 text-sm font-semibold text-foreground">상세 정보</h3>
-                        <p className="text-sm leading-relaxed text-foreground/80">{store.notes}</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="rounded-2xl border-border/70 bg-muted/40">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">좌석 형태/비고 정보가 아직 없습니다.</p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+                <StoreDetailContent store={store} />
               </>
             )}
           </div>

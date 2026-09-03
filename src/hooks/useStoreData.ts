@@ -66,8 +66,7 @@ export const useStoreData = (): UseStoreDataReturn => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'stores' },
-        (payload) => {
-          console.log('실시간 데이터 변경 감지!', payload);
+        () => {
           loadStores({ silent: true });
         }
       )
