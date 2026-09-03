@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Store, StoreSelectInfo, SEAT_TYPE_VALUES, BRAND_OPTIONS } from '../types/store';
 import { MapPin, Navigation, RefreshCw, Search, Edit2, Clock, User } from 'lucide-react';
-// import { InfoWindow } from './InfoWindow';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
@@ -9,7 +8,7 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import { ReportForm } from './ReportForm';
-import { getSeatingBadgeStyle, getSeatingStatusText, formatDate, formatSeatTypes, SEAT_TYPE_META } from '../utils/formatters';
+import { getSeatingBadgeClass, getSeatingStatusText, formatDate, formatSeatTypes, SEAT_TYPE_META } from '../utils/formatters';
 import { quickReportSeating } from '../utils/store-api';
 import { useStore } from '../context/StoreContext';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
@@ -1197,14 +1196,9 @@ export function MapView({ stores, onStoreSelect }: MapViewProps) {
                     </div>
                   </div>
                   <div>
-                    {(() => {
-                      const { bg, text } = getSeatingBadgeStyle(selectedStore.hasSeating);
-                      return (
-                        <Badge className={`${bg} ${text} hover:${bg} text-xs px-3 py-1`}>
-                          {getSeatingStatusText(selectedStore.hasSeating)}
-                        </Badge>
-                      );
-                    })()}
+                    <Badge className={`${getSeatingBadgeClass(selectedStore.hasSeating)} rounded-full px-3 py-1 text-xs`}>
+                      {getSeatingStatusText(selectedStore.hasSeating)}
+                    </Badge>
                   </div>
                 </div>
               </div>

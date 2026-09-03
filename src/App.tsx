@@ -1,5 +1,4 @@
 
-import { useEffect } from "react";
 import { Toaster } from "./components/ui/sonner";
 import { StoreProvider } from './context/StoreContext';
 import { AppContent } from './AppContent';
